@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Sprint Status Reader** - Parse sprint-status.yaml and extract story statuses
 - [x] **Phase 2: Workflow Router** - Map story status to correct workflow
 - [x] **Phase 3: Update Run Command** - Apply status-based routing to run command
-- [ ] **Phase 4: Update Queue Command** - Apply status-based routing to queue command
+- [x] **Phase 4: Update Queue Command** - Apply status-based routing to queue command
 - [ ] **Phase 5: Epic Command** - New command to batch-run all epic stories with fail-fast
 
 ## Phase Details
@@ -70,5 +70,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Sprint Status Reader | 1/1            | Complete    | 2026-01-08 |
 | 2. Workflow Router      | 1/1            | Complete    | 2026-01-08 |
 | 3. Update Run Command   | 1/1            | Complete    | 2026-01-08 |
-| 4. Update Queue Command | 0/TBD          | Not started | -          |
+| 4. Update Queue Command | 1/1            | Complete    | 2026-01-08 |
 | 5. Epic Command         | 0/TBD          | Not started | -          |
