@@ -243,7 +243,7 @@ func TestDefaultPrinter_QueueSummary_WithFailure(t *testing.T) {
 	assert.Contains(t, output, "QUEUE STOPPED")
 	assert.Contains(t, output, "Failed: 1")
 	assert.Contains(t, output, "Remaining: 1")
-	assert.Contains(t, output, "skipped")
+	assert.Contains(t, output, "(pending)")
 }
 
 func TestTruncateString(t *testing.T) {

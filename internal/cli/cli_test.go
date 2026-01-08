@@ -309,7 +309,7 @@ func setupFailingTestApp() *App {
 }
 
 func TestCommandExecution_Success(t *testing.T) {
-	// Note: "run" command excluded - it requires sprint-status.yaml and is tested in run_test.go
+	// Note: "run" and "queue" commands excluded - they require sprint-status.yaml and are tested in run_test.go/queue_test.go
 	tests := []struct {
 		command string
 		args    []string
@@ -318,7 +318,6 @@ func TestCommandExecution_Success(t *testing.T) {
 		{"dev-story", []string{"TEST-123"}},
 		{"code-review", []string{"TEST-123"}},
 		{"git-commit", []string{"TEST-123"}},
-		{"queue", []string{"TEST-123", "TEST-456"}},
 		{"raw", []string{"hello", "world"}},
 	}
 
@@ -339,7 +338,7 @@ func TestCommandExecution_Success(t *testing.T) {
 }
 
 func TestCommandExecution_Failure(t *testing.T) {
-	// Note: "run" command excluded - it requires sprint-status.yaml and is tested in run_test.go
+	// Note: "run" and "queue" commands excluded - they require sprint-status.yaml and are tested in run_test.go/queue_test.go
 	tests := []struct {
 		command string
 		args    []string
@@ -348,7 +347,6 @@ func TestCommandExecution_Failure(t *testing.T) {
 		{"dev-story", []string{"TEST-123"}},
 		{"code-review", []string{"TEST-123"}},
 		{"git-commit", []string{"TEST-123"}},
-		{"queue", []string{"TEST-123"}},
 		{"raw", []string{"hello"}},
 	}
 
