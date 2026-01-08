@@ -13,6 +13,8 @@ type Executor interface {
 	// Execute runs Claude with the given prompt and returns a channel of events.
 	// The channel is closed when Claude exits.
 	// Returns an error if Claude fails to start.
+	// Note: This method is fire-and-forget; the exit status is not available.
+	// Use ExecuteWithResult if you need the exit code.
 	Execute(ctx context.Context, prompt string) (<-chan Event, error)
 
 	// ExecuteWithResult runs Claude and waits for completion.
@@ -69,6 +71,8 @@ func NewExecutor(config ExecutorConfig) *DefaultExecutor {
 }
 
 // Execute runs Claude with the given prompt and returns a channel of events.
+// Note: This method is fire-and-forget; the exit status is not available.
+// Use ExecuteWithResult if you need the exit code.
 func (e *DefaultExecutor) Execute(ctx context.Context, prompt string) (<-chan Event, error) {
 	cmd := exec.CommandContext(ctx, e.config.BinaryPath,
 		"--dangerously-skip-permissions",
@@ -96,9 +100,10 @@ func (e *DefaultExecutor) Execute(ctx context.Context, prompt string) (<-chan Ev
 	// Parse stdout and return events channel
 	events := e.parser.Parse(stdout)
 
-	// Wait for command completion in background
+	// Wait for command completion in background.
+	// Note: Exit status is intentionally not propagated; use ExecuteWithResult if needed.
 	go func() {
-		cmd.Wait()
+		_ = cmd.Wait() //nolint:errcheck // Exit status intentionally ignored; use ExecuteWithResult if needed
 	}()
 
 	return events, nil
@@ -154,7 +159,7 @@ func (e *DefaultExecutor) ExecuteWithResult(ctx context.Context, prompt string, 
 
 func (e *DefaultExecutor) handleStderr(stderr io.ReadCloser) {
 	if e.config.StderrHandler == nil {
-		io.Copy(io.Discard, stderr)
+		_, _ = io.Copy(io.Discard, stderr) //nolint:errcheck // Intentionally discarding stderr
 		return
 	}
 

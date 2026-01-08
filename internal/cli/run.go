@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -19,9 +18,12 @@ func newRunCommand(app *App) *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			storyKey := args[0]
-			ctx := context.Background()
+			ctx := cmd.Context()
 			exitCode := app.Runner.RunFullCycle(ctx, storyKey)
-			os.Exit(exitCode)
+			if exitCode != 0 {
+				cmd.SilenceUsage = true
+				os.Exit(exitCode)
+			}
 		},
 	}
 }

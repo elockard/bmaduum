@@ -72,7 +72,7 @@ just lint
 
 ## Project Structure
 
-```
+```text
 bmad-automate/
 ├── cmd/bmad-automate/     # Application entry point
 ├── config/                # Default configuration files

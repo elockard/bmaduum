@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"os"
 	"strings"
 
@@ -20,9 +19,12 @@ Example:
 		Args: cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			prompt := strings.Join(args, " ")
-			ctx := context.Background()
+			ctx := cmd.Context()
 			exitCode := app.Runner.RunRaw(ctx, prompt)
-			os.Exit(exitCode)
+			if exitCode != 0 {
+				cmd.SilenceUsage = true
+				os.Exit(exitCode)
+			}
 		},
 	}
 }

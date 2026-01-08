@@ -21,7 +21,7 @@ This is a CLI tool that orchestrates Claude CLI to run automated development wor
 
 ### Package Dependencies
 
-```
+```text
 cmd/bmad-automate/main.go
          │
          ▼

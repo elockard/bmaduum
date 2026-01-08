@@ -71,10 +71,6 @@ func NewPrinterWithWriter(w io.Writer) *DefaultPrinter {
 	return &DefaultPrinter{out: w}
 }
 
-func (p *DefaultPrinter) write(format string, args ...interface{}) {
-	fmt.Fprintf(p.out, format, args...)
-}
-
 func (p *DefaultPrinter) writeln(format string, args ...interface{}) {
 	fmt.Fprintf(p.out, format+"\n", args...)
 }

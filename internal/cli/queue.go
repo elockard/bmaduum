@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -18,9 +17,12 @@ Example:
   bmad-automate queue 6-5 6-6 6-7 6-8`,
 		Args: cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			ctx := context.Background()
+			ctx := cmd.Context()
 			exitCode := app.Queue.RunQueue(ctx, args)
-			os.Exit(exitCode)
+			if exitCode != 0 {
+				cmd.SilenceUsage = true
+				os.Exit(exitCode)
+			}
 		},
 	}
 }

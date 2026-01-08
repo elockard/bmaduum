@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -15,9 +14,12 @@ func newCreateStoryCommand(app *App) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			storyKey := args[0]
-			ctx := context.Background()
+			ctx := cmd.Context()
 			exitCode := app.Runner.RunSingle(ctx, "create-story", storyKey)
-			os.Exit(exitCode)
+			if exitCode != 0 {
+				cmd.SilenceUsage = true
+				os.Exit(exitCode)
+			}
 		},
 	}
 }
