@@ -64,11 +64,13 @@
 **Goal**: Add comprehensive go doc comments to `internal/claude`, `internal/lifecycle`, `internal/workflow`
 **Depends on**: Previous milestone complete
 **Research**: Unlikely (standard Go documentation patterns)
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
 
-- [ ] 14-01: TBD (run /gsd:plan-phase 14 to break down)
+- [ ] 14-01: internal/claude package documentation
+- [ ] 14-02: internal/lifecycle package documentation
+- [ ] 14-03: internal/workflow package documentation
 
 #### Phase 15: GoDoc Supporting Packages
 
@@ -129,7 +131,7 @@ Plans:
 
 | Phase                         | Milestone | Plans Complete | Status      | Completed |
 | ----------------------------- | --------- | -------------- | ----------- | --------- |
-| 14. GoDoc Core Packages       | v1.2      | 0/?            | Not started | -         |
+| 14. GoDoc Core Packages       | v1.2      | 0/3            | Planned     | -         |
 | 15. GoDoc Supporting Packages | v1.2      | 0/?            | Not started | -         |
 | 16. Package Documentation     | v1.2      | 0/?            | Not started | -         |
 | 17. Update Docs Folder        | v1.2      | 0/?            | Not started | -         |
