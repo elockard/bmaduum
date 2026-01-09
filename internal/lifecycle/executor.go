@@ -1,3 +1,13 @@
+// Package lifecycle orchestrates story lifecycle execution from current status to done.
+//
+// The lifecycle package provides [Executor] which runs stories through their complete
+// workflow sequence (create->dev->review->commit) based on current status. Each step
+// updates the story status automatically after successful completion.
+//
+// Key concepts:
+//   - Lifecycle steps are determined by [router.GetLifecycle] based on current status
+//   - Each step runs a workflow then updates status via [StatusWriter]
+//   - Progress can be tracked via [ProgressCallback]
 package lifecycle
 
 import (
