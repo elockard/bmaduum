@@ -1,7 +1,24 @@
 // Package claude provides types and functionality for interacting with the Claude CLI.
+//
+// This package handles spawning Claude as a subprocess, parsing its streaming JSON
+// output, and converting raw events into a convenient structured format.
+//
+// Key types:
+//   - [Executor]: Interface for running Claude CLI commands
+//   - [Parser]: Interface for parsing streaming JSON output
+//   - [Event]: Parsed event with convenience methods for common checks
+//
+// For testing, use [MockExecutor] which implements [Executor] without spawning
+// real processes.
 package claude
 
-// StreamEvent represents a JSON event from Claude's streaming output.
+// StreamEvent represents a raw JSON event from Claude's streaming output.
+//
+// This is the low-level structure that maps directly to Claude's stream-json format.
+// Most users should work with [Event] instead, which provides parsed fields and
+// convenience methods. StreamEvent is primarily used internally by [Parser] and
+// is available via [Event.Raw] for cases where access to the original JSON
+// structure is needed.
 type StreamEvent struct {
 	Type          string          `json:"type"`
 	Subtype       string          `json:"subtype,omitempty"`
@@ -9,12 +26,23 @@ type StreamEvent struct {
 	ToolUseResult *ToolResult     `json:"tool_use_result,omitempty"`
 }
 
-// MessageContent represents the content of a message from Claude.
+// MessageContent represents the content of a message in Claude's streaming output.
+//
+// A message may contain multiple [ContentBlock] items, typically text output
+// and/or tool invocations. This structure appears in assistant-type events
+// within [StreamEvent.Message].
 type MessageContent struct {
 	Content []ContentBlock `json:"content,omitempty"`
 }
 
-// ContentBlock represents a single block of content (text or tool use).
+// ContentBlock represents a single block of content within a [MessageContent].
+//
+// The Type field indicates the kind of content:
+//   - "text": Contains text output in the Text field
+//   - "tool_use": Contains a tool invocation with Name and Input fields
+//
+// For text blocks, only Type and Text are populated. For tool_use blocks,
+// Type, Name, and Input are populated.
 type ContentBlock struct {
 	Type  string     `json:"type"`
 	Text  string     `json:"text,omitempty"`
@@ -23,6 +51,14 @@ type ContentBlock struct {
 }
 
 // ToolInput represents the input parameters for a tool invocation.
+//
+// Different tools use different fields:
+//   - Command: Used by bash/shell tools for the command to execute
+//   - Description: Human-readable description of what the tool is doing
+//   - FilePath: Used by file operations (read, write, edit) for the target path
+//   - Content: Used by write operations for the content to write
+//
+// All fields are optional; which fields are populated depends on the specific tool.
 type ToolInput struct {
 	Command     string `json:"command,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -31,54 +67,111 @@ type ToolInput struct {
 }
 
 // ToolResult represents the result of a tool execution.
+//
+// This structure appears in user-type events within [StreamEvent.ToolUseResult]
+// and contains the output from tool execution:
+//   - Stdout: Standard output from the tool (e.g., command output)
+//   - Stderr: Standard error output from the tool
+//   - Interrupted: True if the tool execution was interrupted (e.g., timeout or cancellation)
+//
+// Either Stdout or Stderr (or both) may be populated depending on the tool's output.
 type ToolResult struct {
 	Stdout      string `json:"stdout,omitempty"`
 	Stderr      string `json:"stderr,omitempty"`
 	Interrupted bool   `json:"interrupted,omitempty"`
 }
 
-// EventType represents the type of event received from Claude.
+// EventType represents the type of event received from Claude's streaming output.
+//
+// Events flow through the stream in a typical order: system (init), then alternating
+// assistant and user events, and finally a result event when the session completes.
 type EventType string
 
 const (
-	EventTypeSystem    EventType = "system"
+	// EventTypeSystem indicates a system event, typically session initialization.
+	// Check [Event.SessionStarted] to detect the init subtype.
+	EventTypeSystem EventType = "system"
+
+	// EventTypeAssistant indicates output from Claude, either text or tool invocations.
+	// Use [Event.IsText] and [Event.IsToolUse] to distinguish between content types.
 	EventTypeAssistant EventType = "assistant"
-	EventTypeUser      EventType = "user"
-	EventTypeResult    EventType = "result"
+
+	// EventTypeUser indicates tool execution results returned to Claude.
+	// Use [Event.IsToolResult] to check if this event contains tool output.
+	EventTypeUser EventType = "user"
+
+	// EventTypeResult indicates the session has completed.
+	// Check [Event.SessionComplete] which will be true for result events.
+	EventTypeResult EventType = "result"
 )
 
-// SubtypeInit is the subtype for system initialization events.
+// SubtypeInit is the subtype value for system initialization events.
+// When [Event.Type] is [EventTypeSystem] and [Event.Subtype] equals SubtypeInit,
+// the Claude session has started.
 const SubtypeInit = "init"
 
 // Event is a parsed event from Claude's streaming output.
-// It wraps StreamEvent and provides convenience methods.
+//
+// This is the primary type that users interact with when processing Claude's output.
+// It wraps the raw [StreamEvent] and extracts commonly needed fields into convenient
+// top-level properties. Use the convenience methods [Event.IsText], [Event.IsToolUse],
+// and [Event.IsToolResult] to quickly identify event types.
+//
+// Event is created by [NewEventFromStream] and emitted by [Parser.Parse].
 type Event struct {
+	// Raw provides access to the original [StreamEvent] for cases where
+	// the parsed fields are insufficient.
 	Raw *StreamEvent
 
-	// Parsed fields for convenience
-	Type    EventType
+	// Type is the parsed event type (system, assistant, user, or result).
+	Type EventType
+
+	// Subtype provides additional classification for certain event types.
+	// For system events, this may be "init" (see [SubtypeInit]).
 	Subtype string
 
-	// Text content (if Type == EventTypeAssistant and block is text)
+	// Text contains the text content when Type is [EventTypeAssistant]
+	// and the content block is of type "text". Empty otherwise.
 	Text string
 
-	// Tool use (if Type == EventTypeAssistant and block is tool_use)
-	ToolName        string
-	ToolDescription string
-	ToolCommand     string
-	ToolFilePath    string
+	// ToolName is the name of the tool being invoked when Type is
+	// [EventTypeAssistant] and the content block is of type "tool_use".
+	ToolName string
 
-	// Tool result (if Type == EventTypeUser and has tool_use_result)
-	ToolStdout      string
-	ToolStderr      string
+	// ToolDescription is a human-readable description of what the tool
+	// is doing. Populated for tool_use events.
+	ToolDescription string
+
+	// ToolCommand is the command string for bash/shell tool invocations.
+	ToolCommand string
+
+	// ToolFilePath is the file path for file operation tools.
+	ToolFilePath string
+
+	// ToolStdout contains the standard output from a tool execution.
+	// Populated when Type is [EventTypeUser] and the event contains tool results.
+	ToolStdout string
+
+	// ToolStderr contains the standard error output from a tool execution.
+	ToolStderr string
+
+	// ToolInterrupted indicates whether tool execution was interrupted.
 	ToolInterrupted bool
 
-	// Session state
-	SessionStarted  bool
+	// SessionStarted is true for system init events, indicating the
+	// Claude session has begun.
+	SessionStarted bool
+
+	// SessionComplete is true for result events, indicating the
+	// Claude session has finished.
 	SessionComplete bool
 }
 
-// NewEventFromStream creates an Event from a StreamEvent.
+// NewEventFromStream creates an [Event] from a raw [StreamEvent].
+//
+// This function parses the StreamEvent and extracts relevant fields into the
+// Event's convenience properties based on the event type. It handles all event
+// types (system, assistant, user, result) and populates the appropriate fields.
 func NewEventFromStream(raw *StreamEvent) Event {
 	e := Event{
 		Raw:     raw,
@@ -123,17 +216,29 @@ func NewEventFromStream(raw *StreamEvent) Event {
 	return e
 }
 
-// IsText returns true if this event contains text content.
+// IsText returns true if this event contains text content from Claude.
+//
+// Use this method to filter for events where Claude is outputting text
+// (as opposed to invoking tools). Returns true when Type is [EventTypeAssistant]
+// and the Text field is non-empty.
 func (e Event) IsText() bool {
 	return e.Type == EventTypeAssistant && e.Text != ""
 }
 
-// IsToolUse returns true if this event is a tool invocation.
+// IsToolUse returns true if this event represents a tool invocation by Claude.
+//
+// Use this method to detect when Claude is calling a tool. When true, the
+// ToolName, ToolDescription, ToolCommand, and/or ToolFilePath fields will
+// be populated depending on the specific tool being invoked.
 func (e Event) IsToolUse() bool {
 	return e.Type == EventTypeAssistant && e.ToolName != ""
 }
 
-// IsToolResult returns true if this event contains a tool result.
+// IsToolResult returns true if this event contains output from a tool execution.
+//
+// Use this method to detect tool execution results. When true, ToolStdout
+// and/or ToolStderr will contain the tool's output. Check ToolInterrupted
+// to determine if the tool was interrupted before completion.
 func (e Event) IsToolResult() bool {
 	return e.Type == EventTypeUser && (e.ToolStdout != "" || e.ToolStderr != "")
 }
