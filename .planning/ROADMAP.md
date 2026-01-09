@@ -78,16 +78,16 @@ Plans:
 - `run` command uses lifecycle executor
 - Completes story entirely: create→dev→review→commit→done
 
-#### Phase 9: Update Epic Command
+#### Phase 9: Update Epic Command ✅
 
 **Goal**: Epic uses lifecycle executor, full cycle per story before moving to next
 **Depends on**: Phase 8
 **Research**: Unlikely (internal patterns)
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 Plans:
 
-- [ ] 09-01: TBD (run /gsd:plan-phase 9 to break down)
+- [x] 09-01: Epic command with lifecycle execution (TDD) — completed 2026-01-09
 
 **Details:**
 
@@ -174,7 +174,7 @@ Plans:
 | 6. Lifecycle Definition     | v1.1      | 1/1            | Complete    | 2026-01-08 |
 | 7. Story Lifecycle Executor | v1.1      | 2/2            | Complete    | 2026-01-09 |
 | 8. Update Run Command       | v1.1      | 1/1            | Complete    | 2026-01-09 |
-| 9. Update Epic Command      | v1.1      | 0/?            | Not started | -          |
+| 9. Update Epic Command      | v1.1      | 1/1            | Complete    | 2026-01-09 |
 | 10. Update Queue Command    | v1.1      | 0/?            | Not started | -          |
 | 11. Error Recovery & Resume | v1.1      | 0/?            | Not started | -          |
 | 12. Dry Run Mode            | v1.1      | 0/?            | Not started | -          |
