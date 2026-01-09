@@ -68,7 +68,7 @@
 
 Plans:
 
-- [ ] 14-01: internal/claude package documentation
+- [x] 14-01: internal/claude package documentation
 - [ ] 14-02: internal/lifecycle package documentation
 - [ ] 14-03: internal/workflow package documentation
 
@@ -131,7 +131,7 @@ Plans:
 
 | Phase                         | Milestone | Plans Complete | Status      | Completed |
 | ----------------------------- | --------- | -------------- | ----------- | --------- |
-| 14. GoDoc Core Packages       | v1.2      | 0/3            | Planned     | -         |
+| 14. GoDoc Core Packages       | v1.2      | 1/3            | In progress | -         |
 | 15. GoDoc Supporting Packages | v1.2      | 0/?            | Not started | -         |
 | 16. Package Documentation     | v1.2      | 0/?            | Not started | -         |
 | 17. Update Docs Folder        | v1.2      | 0/?            | Not started | -         |
