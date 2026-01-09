@@ -103,11 +103,13 @@ Plans:
 **Goal**: Update existing docs (README, USER_GUIDE, CLI_REFERENCE, ARCHITECTURE, PACKAGES, DEVELOPMENT) for accuracy and completeness
 **Depends on**: Phase 16
 **Research**: Unlikely (internal content)
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
 
-- [ ] 17-01: TBD
+- [ ] 17-01: PACKAGES.md - lifecycle and state package documentation
+- [ ] 17-02: USER_GUIDE.md and CLI_REFERENCE.md - v1.1 features
+- [ ] 17-03: ARCHITECTURE.md, README.md, DEVELOPMENT.md - diagrams and structure
 
 #### Phase 18: Contribution Guide
 
