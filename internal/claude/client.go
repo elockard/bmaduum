@@ -20,7 +20,7 @@ import (
 // For testing, use [MockExecutor] which implements this interface without spawning processes.
 type Executor interface {
 	// Execute runs Claude with the given prompt and returns a channel of [Event] objects.
-	// The channel is closed when Claude exits or the context is cancelled.
+	// The channel is closed when Claude exits or the context is canceled.
 	// Returns an error if Claude fails to start (e.g., binary not found).
 	//
 	// Note: This method is fire-and-forget; the exit status is not available.
@@ -117,7 +117,7 @@ func NewExecutor(config ExecutorConfig) *DefaultExecutor {
 // The returned channel emits events as they are parsed from Claude's streaming output.
 // The channel is closed when:
 //   - Claude exits normally
-//   - The context is cancelled
+//   - The context is canceled
 //   - An unrecoverable error occurs
 //
 // Note: This method does not provide the exit status. The command's exit code is
@@ -272,7 +272,7 @@ type MockExecutor struct {
 // The prompt is recorded in [MockExecutor.RecordedPrompts] for later verification.
 // If [MockExecutor.Error] is set, it returns nil and the error immediately.
 // Otherwise, events are sent to the channel asynchronously and the channel is
-// closed when all events have been sent or the context is cancelled.
+// closed when all events have been sent or the context is canceled.
 func (m *MockExecutor) Execute(ctx context.Context, prompt string) (<-chan Event, error) {
 	m.RecordedPrompts = append(m.RecordedPrompts, prompt)
 
