@@ -41,10 +41,14 @@ go install ./cmd/bmad-automate
 ## Quick Start
 
 ```bash
-# Process a story based on its status
+# Process a story through its full lifecycle to done
+# (automatically runs: create-story -> dev-story -> code-review -> git-commit)
 bmad-automate run PROJ-123
 
-# Process multiple stories
+# Preview what workflows would run without executing
+bmad-automate run --dry-run PROJ-123
+
+# Process multiple stories through their lifecycles
 bmad-automate queue PROJ-123 PROJ-124 PROJ-125
 
 # Process an entire epic
@@ -56,16 +60,18 @@ bmad-automate raw "What files need tests?"
 
 ## Commands Overview
 
-| Command        | Purpose                     |
-| -------------- | --------------------------- |
-| `create-story` | Create story definition     |
-| `dev-story`    | Implement a story           |
-| `code-review`  | Review code changes         |
-| `git-commit`   | Commit and push             |
-| `run`          | Auto-route based on status  |
-| `queue`        | Batch process stories       |
-| `epic`         | Process all stories in epic |
-| `raw`          | Execute arbitrary prompt    |
+| Command        | Purpose                                        |
+| -------------- | ---------------------------------------------- |
+| `create-story` | Create story definition                        |
+| `dev-story`    | Implement a story                              |
+| `code-review`  | Review code changes                            |
+| `git-commit`   | Commit and push                                |
+| `run`          | Execute full lifecycle to done (with resume)   |
+| `queue`        | Batch process stories through lifecycles       |
+| `epic`         | Process all stories in epic through lifecycles |
+| `raw`          | Execute arbitrary prompt                       |
+
+All lifecycle commands (`run`, `queue`, `epic`) support `--dry-run` to preview execution.
 
 See [CLI Reference](CLI_REFERENCE.md) for complete details.
 
@@ -95,10 +101,13 @@ cmd/bmad-automate/main.go
          ▼
     internal/cli (Cobra commands)
          │
-         ├──► internal/workflow (orchestration)
+         ├──► internal/lifecycle (lifecycle orchestration)
          │         │
-         │         ├──► internal/claude (Claude execution)
-         │         └──► internal/output (terminal formatting)
+         │         └──► internal/workflow (single workflow execution)
+         │
+         ├──► internal/state (execution state persistence)
+         │
+         ├──► internal/router (status → workflow routing)
          │
          └──► internal/config (configuration)
 ```

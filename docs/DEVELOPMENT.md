@@ -83,6 +83,14 @@ bmad-automate/
 │   │   ├── queue.go             # QueueRunner
 │   │   └── workflow_test.go     # Tests
 │   │
+│   ├── lifecycle/               # Lifecycle execution (v1.1)
+│   │   ├── executor.go          # Executor for full lifecycle
+│   │   └── executor_test.go     # Tests
+│   │
+│   ├── state/                   # State persistence (v1.1)
+│   │   ├── state.go             # Manager for save/load/clear
+│   │   └── state_test.go        # Tests
+│   │
 │   ├── status/                  # Sprint status
 │   │   ├── types.go             # Status types
 │   │   ├── reader.go            # YAML reader
@@ -90,7 +98,8 @@ bmad-automate/
 │   │
 │   └── router/                  # Workflow routing
 │       ├── router.go            # GetWorkflow function
-│       └── router_test.go       # Tests
+│       ├── lifecycle.go         # GetLifecycle function (v1.1)
+│       └── *_test.go            # Tests
 │
 ├── config/
 │   └── workflows.yaml           # Default configuration
