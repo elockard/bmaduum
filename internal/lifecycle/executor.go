@@ -69,3 +69,21 @@ func (e *Executor) Execute(ctx context.Context, storyKey string) error {
 
 	return nil
 }
+
+// GetSteps returns the lifecycle steps for a story without executing them.
+// This is used for dry-run preview to show what workflows would execute.
+func (e *Executor) GetSteps(storyKey string) ([]router.LifecycleStep, error) {
+	// Get current story status
+	currentStatus, err := e.statusReader.GetStoryStatus(storyKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get lifecycle steps from current status
+	steps, err := router.GetLifecycle(currentStatus)
+	if err != nil {
+		return nil, err // Returns router.ErrStoryComplete for done stories
+	}
+
+	return steps, nil
+}
