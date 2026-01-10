@@ -6,10 +6,11 @@ Comprehensive documentation for the `bmad-automate` CLI tool.
 
 ### For Users
 
-| Document                          | Description                                   |
-| --------------------------------- | --------------------------------------------- |
-| [User Guide](USER_GUIDE.md)       | Getting started, installation, usage patterns |
-| [CLI Reference](CLI_REFERENCE.md) | Complete command reference with examples      |
+| Document                           | Description                                   |
+| ---------------------------------- | --------------------------------------------- |
+| [User Guide](USER_GUIDE.md)        | Getting started, installation, usage patterns |
+| [CLI Reference](CLI_REFERENCE.md)  | Complete command reference with examples      |
+| [CLI Cookbook](examples/README.md) | Recipe-style CLI examples                     |
 
 ### For Developers
 
