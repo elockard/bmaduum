@@ -2,9 +2,9 @@
 
 ## Milestones
 
-- [v1.0 Status-Based Workflow Routing](milestones/v1.0-ROADMAP.md) (Phases 1-5) — SHIPPED 2026-01-08
-- [v1.1 Full Story Lifecycle](milestones/v1.1-ROADMAP.md) (Phases 6-13) — SHIPPED 2026-01-09
-- [v1.2 Documentation](milestones/v1.2-ROADMAP.md) (Phases 14-18) — SHIPPED 2026-01-09
+- ✅ [v1.0 Status-Based Workflow Routing](milestones/v1.0-ROADMAP.md) (Phases 1-5) — SHIPPED 2026-01-08
+- ✅ [v1.1 Full Story Lifecycle](milestones/v1.1-ROADMAP.md) (Phases 6-13) — SHIPPED 2026-01-09
+- ✅ [v1.2 Documentation](milestones/v1.2-ROADMAP.md) (Phases 14-18) — SHIPPED 2026-01-09
 
 ## Completed Milestones
 
@@ -37,95 +37,36 @@
 
 </details>
 
+<details>
+<summary>v1.2 Documentation (Phases 14-18) — SHIPPED 2026-01-09</summary>
+
+**Delivered:** Comprehensive documentation for open-sourced project — go doc comments, package examples, updated docs folder, and CLI cookbook.
+
+- [x] Phase 14: GoDoc Core Packages (3/3 plans) — completed 2026-01-09
+- [x] Phase 15: GoDoc Supporting Packages (3/3 plans) — completed 2026-01-09
+- [x] Phase 16: Package Documentation (3/3 plans) — completed 2026-01-09
+- [x] Phase 17: Update Docs Folder (3/3 plans) — completed 2026-01-09
+- [x] Phase 18: API Examples (1/1 plan) — completed 2026-01-09
+
+</details>
+
 ## Progress
-
-| Phase                       | Milestone | Plans Complete | Status   | Completed  |
-| --------------------------- | --------- | -------------- | -------- | ---------- |
-| 1. Sprint Status Reader     | v1.0      | 1/1            | Complete | 2026-01-08 |
-| 2. Workflow Router          | v1.0      | 1/1            | Complete | 2026-01-08 |
-| 3. Update Run Command       | v1.0      | 1/1            | Complete | 2026-01-08 |
-| 4. Update Queue Command     | v1.0      | 1/1            | Complete | 2026-01-08 |
-| 5. Epic Command             | v1.0      | 1/1            | Complete | 2026-01-08 |
-| 6. Lifecycle Definition     | v1.1      | 1/1            | Complete | 2026-01-08 |
-| 7. Story Lifecycle Executor | v1.1      | 2/2            | Complete | 2026-01-09 |
-| 8. Update Run Command       | v1.1      | 1/1            | Complete | 2026-01-09 |
-| 9. Update Epic Command      | v1.1      | 1/1            | Complete | 2026-01-09 |
-| 10. Update Queue Command    | v1.1      | 1/1            | Complete | 2026-01-09 |
-| 11. Error Recovery & Resume | v1.1      | 1/1            | Complete | 2026-01-09 |
-| 12. Dry Run Mode            | v1.1      | 2/2            | Complete | 2026-01-09 |
-| 13. Enhanced Progress UI    | v1.1      | 1/1            | Complete | 2026-01-09 |
-
-### v1.2 Documentation — SHIPPED 2026-01-09
-
-**Milestone Goal:** Comprehensive documentation for open-sourced project — go doc comments throughout codebase, updated docs/, contribution guides, and API examples.
-
-#### Phase 14: GoDoc Core Packages
-
-**Goal**: Add comprehensive go doc comments to `internal/claude`, `internal/lifecycle`, `internal/workflow`
-**Depends on**: Previous milestone complete
-**Research**: Unlikely (standard Go documentation patterns)
-**Plans**: 3
-
-Plans:
-
-- [x] 14-01: internal/claude package documentation
-- [x] 14-02: internal/lifecycle package documentation
-- [x] 14-03: internal/workflow package documentation
-
-#### Phase 15: GoDoc Supporting Packages
-
-**Goal**: Add doc comments to `internal/cli`, `internal/router`, `internal/status`, `internal/state`, `internal/output`, `internal/config`
-**Depends on**: Phase 14
-**Research**: Unlikely (standard Go documentation patterns)
-**Plans**: 3
-
-Plans:
-
-- [x] 15-01: internal/cli package documentation
-- [x] 15-02: internal/status and internal/output package documentation
-- [x] 15-03: internal/router, internal/state, and internal/config package documentation
-
-#### Phase 16: Package Documentation
-
-**Goal**: Add package-level doc.go files with overviews and examples for each package
-**Depends on**: Phase 15
-**Research**: Unlikely (standard Go documentation patterns)
-**Plans**: 3
-
-Plans:
-
-- [x] 16-01: claude, lifecycle, workflow package doc.go files
-- [x] 16-02: cli, output package doc.go files
-- [x] 16-03: config, router, state, status package doc.go files
-
-#### Phase 17: Update Docs Folder
-
-**Goal**: Update existing docs (README, USER_GUIDE, CLI_REFERENCE, ARCHITECTURE, PACKAGES, DEVELOPMENT) for accuracy and completeness
-**Depends on**: Phase 16
-**Research**: Unlikely (internal content)
-**Plans**: 3
-
-Plans:
-
-- [x] 17-01: PACKAGES.md - lifecycle and state package documentation
-- [x] 17-02: USER_GUIDE.md and CLI_REFERENCE.md - v1.1 features
-- [x] 17-03: ARCHITECTURE.md, README.md, DEVELOPMENT.md - diagrams and structure
-
-#### Phase 18: API Examples
-
-**Goal**: Add runnable examples and usage patterns in docs/examples/ folder
-**Depends on**: Phase 17
-**Research**: Unlikely (internal patterns)
-**Plans**: 1
-
-Plans:
-
-- [x] 18-01: CLI Cookbook with recipe-style examples
-
-## Progress (v1.2)
 
 | Phase                         | Milestone | Plans Complete | Status   | Completed  |
 | ----------------------------- | --------- | -------------- | -------- | ---------- |
+| 1. Sprint Status Reader       | v1.0      | 1/1            | Complete | 2026-01-08 |
+| 2. Workflow Router            | v1.0      | 1/1            | Complete | 2026-01-08 |
+| 3. Update Run Command         | v1.0      | 1/1            | Complete | 2026-01-08 |
+| 4. Update Queue Command       | v1.0      | 1/1            | Complete | 2026-01-08 |
+| 5. Epic Command               | v1.0      | 1/1            | Complete | 2026-01-08 |
+| 6. Lifecycle Definition       | v1.1      | 1/1            | Complete | 2026-01-08 |
+| 7. Story Lifecycle Executor   | v1.1      | 2/2            | Complete | 2026-01-09 |
+| 8. Update Run Command         | v1.1      | 1/1            | Complete | 2026-01-09 |
+| 9. Update Epic Command        | v1.1      | 1/1            | Complete | 2026-01-09 |
+| 10. Update Queue Command      | v1.1      | 1/1            | Complete | 2026-01-09 |
+| 11. Error Recovery & Resume   | v1.1      | 1/1            | Complete | 2026-01-09 |
+| 12. Dry Run Mode              | v1.1      | 2/2            | Complete | 2026-01-09 |
+| 13. Enhanced Progress UI      | v1.1      | 1/1            | Complete | 2026-01-09 |
 | 14. GoDoc Core Packages       | v1.2      | 3/3            | Complete | 2026-01-09 |
 | 15. GoDoc Supporting Packages | v1.2      | 3/3            | Complete | 2026-01-09 |
 | 16. Package Documentation     | v1.2      | 3/3            | Complete | 2026-01-09 |

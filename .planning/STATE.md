@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-01-09)
 
 **Core value:** Fully automated story lifecycle execution — run a story once and watch it complete from current status to done, with auto-status updates and error recovery.
-**Current focus:** v1.2 Documentation — comprehensive docs for open-sourced project
+**Current focus:** Ready for open source release — v1.2 Documentation complete
 
 ## Current Position
 
 Phase: 18 of 18 (API Examples)
-Plan: 1/1 complete
-Status: Milestone complete
-Last activity: 2026-01-09 — Completed 18-01-PLAN.md
+Plan: Complete
+Status: All milestones complete (v1.0, v1.1, v1.2)
+Last activity: 2026-01-09 — v1.2 milestone archived
 
 Progress: ██████████ 100%
 
@@ -21,40 +21,28 @@ Progress: ██████████ 100%
 **v1.0 Summary:**
 
 - Total plans completed: 5
-- Average duration: 2.8 min
-- Total execution time: 14 min
-- Same-day completion
+- Phases: 5 (Phase 1-5)
+- Same-day completion (2026-01-08)
 
 **v1.1 Summary:**
 
 - Total plans completed: 11
 - Phases: 8 (Phase 6-13)
 - Files modified: 48 (+7,984 lines, -534 lines)
-- Timeline: ~12 hours (same day)
+- Same-day completion (2026-01-09)
 
-**By Phase:**
+**v1.2 Summary:**
 
-| Phase | Plans | Total | Avg/Plan |
-| ----- | ----- | ----- | -------- |
-| 1     | 1     | 2 min | 2 min    |
-| 2     | 1     | 3 min | 3 min    |
-| 3     | 1     | 3 min | 3 min    |
-| 4     | 1     | 4 min | 4 min    |
-| 5     | 1     | 2 min | 2 min    |
-| 6     | 1     | 3 min | 3 min    |
-| 7     | 2     | 3 min | 1.5 min  |
-| 8     | 1     | 5 min | 5 min    |
-| 9     | 1     | 3 min | 3 min    |
-| 10    | 1     | 4 min | 4 min    |
-| 11    | 1     | 2 min | 2 min    |
-| 12    | 2     | 4 min | 2 min    |
-| 13    | 1     | 2 min | 2 min    |
+- Total plans completed: 13
+- Phases: 5 (Phase 14-18)
+- Files modified: 68 (+6,922 lines, -325 lines)
+- Same-day completion (2026-01-09)
 
 ## Accumulated Context
 
 ### Decisions
 
-All v1.0 and v1.1 decisions documented in PROJECT.md Key Decisions table with good outcomes.
+All decisions documented in PROJECT.md Key Decisions table with good outcomes.
 
 ### Deferred Issues
 
@@ -64,7 +52,7 @@ None
 
 - v1.0 Status-Based Workflow Routing: SHIPPED 2026-01-08
 - v1.1 Full Story Lifecycle: SHIPPED 2026-01-09
-- Milestone v1.2 created: Documentation focus, 5 phases (Phase 14-18)
+- v1.2 Documentation: SHIPPED 2026-01-09
 
 ### Blockers/Concerns
 
@@ -73,5 +61,5 @@ None
 ## Session Continuity
 
 Last session: 2026-01-09
-Stopped at: Completed 18-01-PLAN.md (CLI Cookbook) — v1.2 milestone complete
+Stopped at: v1.2 milestone complete — ready for open source release
 Resume file: None

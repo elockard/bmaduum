@@ -2,26 +2,28 @@
 
 ## What This Is
 
-A CLI tool that orchestrates Claude CLI to run complete automated development workflows. Stories run through their full lifecycle (create→dev→review→commit) automatically, with error recovery, dry-run mode, and step progress visibility.
+A CLI tool that orchestrates Claude CLI to run complete automated development workflows. Stories run through their full lifecycle (create→dev→review→commit) automatically, with error recovery, dry-run mode, and step progress visibility. Fully documented with go doc comments and runnable examples.
 
 ## Core Value
 
 Fully automated story lifecycle execution — run a story once and watch it complete from current status to done, with auto-status updates and error recovery.
 
-## Current State (v1.1)
+## Current State (v1.2)
 
 **Shipped:** 2026-01-09
 
-Full story lifecycle execution is complete:
+Full story lifecycle execution and comprehensive documentation:
 
 - `run <story>` — Executes complete lifecycle from current status to done
 - `queue <story>...` — Full lifecycle for each story, skips done, fails fast
 - `epic <epic-id>` — Full lifecycle for all stories in an epic
 - `--dry-run` — Preview workflow sequence without execution
 - Error recovery — State saved on failure, resumable
+- Go doc comments — All internal packages documented with examples
+- CLI Cookbook — 14 recipe-style examples in docs/examples/
 
 Tech stack: Go, Cobra, Viper, yaml.v3
-Codebase: 6,418 LOC Go
+Codebase: 8,448 LOC Go
 
 ## Requirements
 
@@ -46,10 +48,15 @@ Codebase: 6,418 LOC Go
 - ✓ State persistence for error recovery — v1.1
 - ✓ Dry-run mode for workflow preview — v1.1
 - ✓ Step progress visibility with callbacks — v1.1
+- ✓ Go doc comments for all internal packages — v1.2
+- ✓ Runnable Example functions in doc_test.go — v1.2
+- ✓ Package-level doc.go files with overviews — v1.2
+- ✓ Updated docs folder for v1.1 features — v1.2
+- ✓ CLI Cookbook with recipe-style examples — v1.2
 
 ### Active
 
-(None currently — v1.1 milestone complete)
+(None currently — v1.2 milestone complete)
 
 ### Out of Scope
 
@@ -98,6 +105,9 @@ Codebase: 6,418 LOC Go
 | Atomic writes for state files         | Temp file + rename prevents corruption                | ✓ Good  |
 | SetProgressCallback (not constructor) | Optional callback keeps NewExecutor signature simple  | ✓ Good  |
 
+| Used doc_test.go instead of doc.go | Go requires \_test.go for external test packages | ✓ Good |
+| Recipe format for CLI cookbook | Brief, scannable, copy-paste-ready | ✓ Good |
+
 ---
 
-_Last updated: 2026-01-09 after v1.1 milestone_
+_Last updated: 2026-01-09 after v1.2 milestone_

@@ -1,5 +1,32 @@
 # Project Milestones: BMAD Automate
 
+## v1.2 Documentation (Shipped: 2026-01-09)
+
+**Delivered:** Comprehensive documentation for open-sourced project — go doc comments, package examples, updated docs folder, and CLI cookbook.
+
+**Phases completed:** 14-18 (13 plans total)
+
+**Key accomplishments:**
+
+- Comprehensive go doc comments for all internal packages (claude, lifecycle, workflow, cli, router, status, state, output, config)
+- 10 runnable Example functions in doc_test.go files for godoc and testing
+- Package-level doc.go files with overviews for each package
+- Updated docs folder — ARCHITECTURE.md, README.md, USER_GUIDE.md, CLI_REFERENCE.md, DEVELOPMENT.md, PACKAGES.md reflect v1.1
+- CLI Cookbook with 14 recipe-style examples in docs/examples/
+
+**Stats:**
+
+- 68 files created/modified (+6,922 lines, -325 lines)
+- 8,448 lines of Go total (up from 6,418)
+- 5 phases, 13 plans
+- Same-day completion (2026-01-09)
+
+**Git range:** `docs(14-01)` → `docs(18-01)`
+
+**What's next:** Ready for open source release
+
+---
+
 ## v1.1 Full Story Lifecycle (Shipped: 2026-01-09)
 
 **Delivered:** Complete story lifecycle execution (create→dev→review→commit) with error recovery, dry-run mode, and step progress visibility.
