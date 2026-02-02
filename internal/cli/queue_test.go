@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"bmad-automate/internal/config"
+	"bmad-automate/internal/output"
 	"bmad-automate/internal/status"
 )
 
@@ -167,6 +168,7 @@ func TestQueueCommand_FullLifecycleExecution(t *testing.T) {
 				StatusReader: statusReader,
 				StatusWriter: mockWriter,
 				Runner:       mockRunner,
+				Printer:      output.NewPrinterWithWriter(&bytes.Buffer{}),
 			}
 
 			rootCmd := NewRootCommand(app)
@@ -223,6 +225,7 @@ func TestQueueCommand_StoryNotFoundReturnsError(t *testing.T) {
 		StatusReader: statusReader,
 		StatusWriter: mockWriter,
 		Runner:       mockRunner,
+		Printer:      output.NewPrinterWithWriter(&bytes.Buffer{}),
 	}
 
 	rootCmd := NewRootCommand(app)
@@ -255,6 +258,7 @@ func TestQueueCommand_MissingSprintStatusFile(t *testing.T) {
 		StatusReader: statusReader,
 		StatusWriter: mockWriter,
 		Runner:       mockRunner,
+		Printer:      output.NewPrinterWithWriter(&bytes.Buffer{}),
 	}
 
 	rootCmd := NewRootCommand(app)

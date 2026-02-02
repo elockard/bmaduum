@@ -30,6 +30,7 @@ func Example_mockExecutor() {
 				fmt.Println(event.Text)
 			}
 		},
+		"", // model (empty = use default)
 	)
 
 	if err != nil {

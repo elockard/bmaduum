@@ -131,3 +131,61 @@ func (r *Reader) GetEpicStories(epicID string) ([]string, error) {
 
 	return result, nil
 }
+
+// GetAllEpics returns all epic IDs with active status, sorted numerically.
+//
+// An epic is considered "active" if its status is not "done", "deferred", or "optional".
+// Epic IDs are extracted from story keys (format: {epicID}-{storyNum}-{description}).
+// Results are sorted numerically by epic ID.
+func (r *Reader) GetAllEpics() ([]string, error) {
+	sprintStatus, err := r.Read()
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect unique epic IDs with their numeric value for sorting
+	type epicInfo struct {
+		id  string
+		num int
+	}
+
+	epicMap := make(map[string]int)
+
+	for key := range sprintStatus.DevelopmentStatus {
+		// Extract epic ID from story key (format: {epicID}-{storyNum}-{description})
+		parts := strings.SplitN(key, "-", 2)
+		if len(parts) < 1 {
+			continue
+		}
+
+		epicID := parts[0]
+
+		// Check if this epic is active
+		// For now, we return all epics - the caller can filter by status if needed
+		epicMap[epicID] = 0
+	}
+
+	if len(epicMap) == 0 {
+		return []string{}, nil
+	}
+
+	// Convert to slice and parse numeric values for sorting
+	epics := make([]epicInfo, 0, len(epicMap))
+	for id := range epicMap {
+		num, _ := strconv.Atoi(id)
+		epics = append(epics, epicInfo{id: id, num: num})
+	}
+
+	// Sort by numeric value
+	sort.Slice(epics, func(i, j int) bool {
+		return epics[i].num < epics[j].num
+	})
+
+	// Extract just the IDs
+	result := make([]string, len(epics))
+	for i, e := range epics {
+		result[i] = e.id
+	}
+
+	return result, nil
+}

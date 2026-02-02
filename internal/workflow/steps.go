@@ -26,6 +26,8 @@ type Step struct {
 	Name string
 	// Prompt is the expanded prompt text to send to Claude CLI.
 	Prompt string
+	// Model is the Claude model to use for this step (optional).
+	Model string
 }
 
 // StepResult captures the outcome of executing a single workflow step.

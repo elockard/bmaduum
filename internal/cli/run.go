@@ -12,6 +12,7 @@ import (
 
 func newRunCommand(app *App) *cobra.Command {
 	var dryRun bool
+	var autoRetry bool
 
 	cmd := &cobra.Command{
 		Use:   "run <story-key>",
@@ -27,7 +28,8 @@ The command executes all remaining workflows based on the story's current status
 
 Status is updated in sprint-status.yaml after each successful workflow.
 
-Use --dry-run to preview workflows without executing them.`,
+Use --dry-run to preview workflows without executing them.
+Use --auto-retry to automatically retry on rate limit errors.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			storyKey := args[0]
@@ -51,7 +53,12 @@ Use --dry-run to preview workflows without executing them.`,
 
 				fmt.Printf("Dry run for story %s:\n", storyKey)
 				for i, step := range steps {
-					fmt.Printf("  %d. %s → %s\n", i+1, step.Workflow, step.NextStatus)
+					modelInfo := ""
+					model := app.Config.GetModel(step.Workflow)
+					if model != "" {
+						modelInfo = fmt.Sprintf(" (%s)", model)
+					}
+					fmt.Printf("  %d. %s%s → %s\n", i+1, step.Workflow, modelInfo, step.NextStatus)
 				}
 				return nil
 			}
@@ -61,8 +68,10 @@ Use --dry-run to preview workflows without executing them.`,
 				app.Printer.StepStart(stepIndex, totalSteps, workflow)
 			})
 
-			// Execute the full lifecycle
-			err := executor.Execute(ctx, storyKey)
+			// Execute with optional retry
+			err := executeWithRetry(ctx, executor, storyKey, autoRetry, 10, func(stepIndex, totalSteps int, workflow string) {
+				app.Printer.StepStart(stepIndex, totalSteps, workflow)
+			})
 			if err != nil {
 				cmd.SilenceUsage = true
 				if errors.Is(err, router.ErrStoryComplete) {
@@ -78,6 +87,7 @@ Use --dry-run to preview workflows without executing them.`,
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
+	cmd.Flags().BoolVar(&autoRetry, "auto-retry", false, "Automatically retry on rate limit errors")
 
 	return cmd
 }

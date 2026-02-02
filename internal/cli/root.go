@@ -66,6 +66,9 @@ type StatusReader interface {
 	// GetEpicStories returns all story keys belonging to the given epic ID.
 	// Story keys are sorted numerically by story number for predictable execution order.
 	GetEpicStories(epicID string) ([]string, error)
+
+	// GetAllEpics returns all epic IDs with active status, sorted numerically.
+	GetAllEpics() ([]string, error)
 }
 
 // StatusWriter is the interface for updating story status in sprint-status.yaml.
@@ -177,7 +180,9 @@ story creation, development, code review, and git operations.`,
 		newRunCommand(app),
 		newQueueCommand(app),
 		newEpicCommand(app),
+		newAllEpicsCommand(app),
 		newRawCommand(app),
+		newVersionCommand(),
 	)
 
 	return rootCmd

@@ -134,6 +134,17 @@ func (c *Config) GetFullCycleSteps() []string {
 	return c.FullCycle.Steps
 }
 
+// GetModel returns the model configured for a workflow, or empty string if not set.
+//
+// When empty, the Claude CLI will use its default model.
+func (c *Config) GetModel(workflowName string) string {
+	workflow, ok := c.Workflows[workflowName]
+	if !ok {
+		return ""
+	}
+	return workflow.Model
+}
+
 // expandTemplate expands a Go template string with the given data.
 func expandTemplate(tmpl string, data PromptData) (string, error) {
 	t, err := template.New("prompt").Parse(tmpl)

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"bmad-automate/internal/config"
+	"bmad-automate/internal/output"
 	"bmad-automate/internal/status"
 )
 
@@ -145,12 +146,15 @@ func TestEpicCommand_FullLifecycleExecution(t *testing.T) {
 			}
 			mockWriter := &MockStatusWriter{}
 			statusReader := status.NewReader(tmpDir)
+			buf := &bytes.Buffer{}
+			printer := output.NewPrinterWithWriter(buf)
 
 			app := &App{
 				Config:       config.DefaultConfig(),
 				StatusReader: statusReader,
 				StatusWriter: mockWriter,
 				Runner:       mockRunner,
+				Printer:      printer,
 			}
 
 			rootCmd := NewRootCommand(app)
@@ -199,12 +203,15 @@ func TestEpicCommand_NoStoriesFoundReturnsError(t *testing.T) {
 	mockRunner := &MockWorkflowRunner{}
 	mockWriter := &MockStatusWriter{}
 	statusReader := status.NewReader(tmpDir)
+	buf := &bytes.Buffer{}
+	printer := output.NewPrinterWithWriter(buf)
 
 	app := &App{
 		Config:       config.DefaultConfig(),
 		StatusReader: statusReader,
 		StatusWriter: mockWriter,
 		Runner:       mockRunner,
+		Printer:      printer,
 	}
 
 	rootCmd := NewRootCommand(app)

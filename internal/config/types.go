@@ -47,6 +47,11 @@ type WorkflowConfig struct {
 	// Use {{.StoryKey}} to reference the story key.
 	// Example: "Work on story: {{.StoryKey}}"
 	PromptTemplate string `mapstructure:"prompt_template"`
+
+	// Model is the Claude model to use for this workflow.
+	// If empty, the default model is used.
+	// Examples: "opus", "sonnet", "haiku", "claude-sonnet-4-5-20250929"
+	Model string `mapstructure:"model"`
 }
 
 // FullCycleConfig defines the steps for a full development cycle.

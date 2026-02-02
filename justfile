@@ -1,3 +1,6 @@
+# Use PowerShell on Windows
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+
 # Binary name
 binary_name := "bmad-automate"
 
@@ -32,9 +35,14 @@ test-pkg pkg:
     go test -v {{pkg}}
 
 # Clean build artifacts
+[unix]
 clean:
     rm -f {{binary_name}}
     rm -f coverage.out coverage.html
+
+[windows]
+clean:
+    Remove-Item -Force -ErrorAction SilentlyContinue {{binary_name}}.exe, coverage.out, coverage.html
 
 # Run linter (requires golangci-lint)
 lint:
@@ -52,5 +60,10 @@ vet:
 check: fmt vet test
 
 # Build and run with arguments (e.g., just run --help)
+[unix]
 run *args: build
     ./{{binary_name}} {{args}}
+
+[windows]
+run *args: build
+    .\{{binary_name}}.exe {{args}}

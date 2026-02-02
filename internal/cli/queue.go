@@ -12,6 +12,7 @@ import (
 
 func newQueueCommand(app *App) *cobra.Command {
 	var dryRun bool
+	var autoRetry bool
 
 	cmd := &cobra.Command{
 		Use:   "queue <story-key> [story-key...]",
@@ -31,6 +32,7 @@ The queue stops on the first failure. Done stories are skipped and do not cause 
 Status is updated in sprint-status.yaml after each successful workflow.
 
 Use --dry-run to preview workflows without executing them.
+Use --auto-retry to automatically retry on rate limit errors.
 
 Example:
   bmad-automate queue 6-5 6-6 6-7 6-8`,
@@ -43,12 +45,14 @@ Example:
 
 			// Handle dry-run mode
 			if dryRun {
-				return runQueueDryRun(cmd, executor, args)
+				return runQueueDryRun(cmd, app, executor, args)
 			}
 
 			// Execute full lifecycle for each story in order
 			for _, storyKey := range args {
-				err := executor.Execute(ctx, storyKey)
+				err := executeWithRetry(ctx, executor, storyKey, autoRetry, 10, func(stepIndex, totalSteps int, workflow string) {
+					app.Printer.StepStart(stepIndex, totalSteps, workflow)
+				})
 				if err != nil {
 					cmd.SilenceUsage = true
 					if errors.Is(err, router.ErrStoryComplete) {
@@ -67,11 +71,12 @@ Example:
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
+	cmd.Flags().BoolVar(&autoRetry, "auto-retry", false, "Automatically retry on rate limit errors")
 
 	return cmd
 }
 
-func runQueueDryRun(cmd *cobra.Command, executor *lifecycle.Executor, storyKeys []string) error {
+func runQueueDryRun(cmd *cobra.Command, app *App, executor *lifecycle.Executor, storyKeys []string) error {
 	fmt.Printf("Dry run for %d stories:\n", len(storyKeys))
 
 	totalWorkflows := 0
@@ -95,7 +100,12 @@ func runQueueDryRun(cmd *cobra.Command, executor *lifecycle.Executor, storyKeys 
 		}
 
 		for i, step := range steps {
-			fmt.Printf("  %d. %s → %s\n", i+1, step.Workflow, step.NextStatus)
+			modelInfo := ""
+			model := app.Config.GetModel(step.Workflow)
+			if model != "" {
+				modelInfo = fmt.Sprintf(" (%s)", model)
+			}
+			fmt.Printf("  %d. %s%s → %s\n", i+1, step.Workflow, modelInfo, step.NextStatus)
 		}
 		totalWorkflows += len(steps)
 		storiesWithWork++

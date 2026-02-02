@@ -55,7 +55,8 @@ func (r *Runner) RunSingle(ctx context.Context, workflowName, storyKey string) i
 	}
 
 	label := fmt.Sprintf("%s: %s", workflowName, storyKey)
-	return r.runClaude(ctx, prompt, label)
+	model := r.config.GetModel(workflowName)
+	return r.runClaude(ctx, prompt, label, model)
 }
 
 // RunRaw executes an arbitrary prompt without template expansion.
@@ -65,7 +66,7 @@ func (r *Runner) RunSingle(ctx context.Context, workflowName, storyKey string) i
 //
 // Returns the exit code from Claude CLI (0 for success, non-zero for failure).
 func (r *Runner) RunRaw(ctx context.Context, prompt string) int {
-	return r.runClaude(ctx, prompt, "raw")
+	return r.runClaude(ctx, prompt, "raw", "")
 }
 
 // RunFullCycle executes all configured steps in sequence for a story.
@@ -94,7 +95,8 @@ func (r *Runner) RunFullCycle(ctx context.Context, storyKey string) int {
 			fmt.Printf("Error building step %s: %v\n", name, err)
 			return 1
 		}
-		steps = append(steps, Step{Name: name, Prompt: prompt})
+		model := r.config.GetModel(name)
+		steps = append(steps, Step{Name: name, Prompt: prompt, Model: model})
 	}
 
 	r.printer.CycleHeader(storyKey)
@@ -105,7 +107,7 @@ func (r *Runner) RunFullCycle(ctx context.Context, storyKey string) int {
 		r.printer.StepStart(i+1, len(steps), step.Name)
 
 		stepStart := time.Now()
-		exitCode := r.runClaude(ctx, step.Prompt, fmt.Sprintf("%s: %s", step.Name, storyKey))
+		exitCode := r.runClaude(ctx, step.Prompt, fmt.Sprintf("%s: %s", step.Name, storyKey), step.Model)
 		duration := time.Since(stepStart)
 
 		results[i] = output.StepResult{
@@ -131,7 +133,7 @@ func (r *Runner) RunFullCycle(ctx context.Context, storyKey string) int {
 // This is the core execution method used by all public Runner methods.
 // It displays a command header, streams events to the printer via handleEvent,
 // and displays a footer with timing and exit status.
-func (r *Runner) runClaude(ctx context.Context, prompt, label string) int {
+func (r *Runner) runClaude(ctx context.Context, prompt, label, model string) int {
 	r.printer.CommandHeader(label, prompt, r.config.Output.TruncateLength)
 
 	startTime := time.Now()
@@ -140,7 +142,7 @@ func (r *Runner) runClaude(ctx context.Context, prompt, label string) int {
 		r.handleEvent(event)
 	}
 
-	exitCode, err := r.executor.ExecuteWithResult(ctx, prompt, handler)
+	exitCode, err := r.executor.ExecuteWithResult(ctx, prompt, handler, model)
 	if err != nil {
 		fmt.Printf("Error executing claude: %v\n", err)
 		exitCode = 1

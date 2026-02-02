@@ -12,6 +12,7 @@ import (
 
 func newEpicCommand(app *App) *cobra.Command {
 	var dryRun bool
+	var autoRetry bool
 
 	cmd := &cobra.Command{
 		Use:   "epic <epic-id>",
@@ -32,6 +33,7 @@ The epic command stops on the first failure. Done stories are skipped and do not
 Status is updated in sprint-status.yaml after each successful workflow.
 
 Use --dry-run to preview workflows without executing them.
+Use --auto-retry to automatically retry on rate limit errors.
 
 Example:
   bmad-automate epic 6
@@ -53,12 +55,14 @@ Example:
 
 			// Handle dry-run mode
 			if dryRun {
-				return runEpicDryRun(cmd, executor, epicID, storyKeys)
+				return runEpicDryRun(cmd, app, executor, epicID, storyKeys)
 			}
 
 			// Execute full lifecycle for each story in order
 			for _, storyKey := range storyKeys {
-				err := executor.Execute(ctx, storyKey)
+				err := executeWithRetry(ctx, executor, storyKey, autoRetry, 10, func(stepIndex, totalSteps int, workflow string) {
+					app.Printer.StepStart(stepIndex, totalSteps, workflow)
+				})
 				if err != nil {
 					cmd.SilenceUsage = true
 					if errors.Is(err, router.ErrStoryComplete) {
@@ -77,11 +81,12 @@ Example:
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
+	cmd.Flags().BoolVar(&autoRetry, "auto-retry", false, "Automatically retry on rate limit errors")
 
 	return cmd
 }
 
-func runEpicDryRun(cmd *cobra.Command, executor *lifecycle.Executor, epicID string, storyKeys []string) error {
+func runEpicDryRun(cmd *cobra.Command, app *App, executor *lifecycle.Executor, epicID string, storyKeys []string) error {
 	fmt.Printf("Dry run for epic %s:\n", epicID)
 
 	totalWorkflows := 0
@@ -105,7 +110,12 @@ func runEpicDryRun(cmd *cobra.Command, executor *lifecycle.Executor, epicID stri
 		}
 
 		for i, step := range steps {
-			fmt.Printf("  %d. %s → %s\n", i+1, step.Workflow, step.NextStatus)
+			modelInfo := ""
+			model := app.Config.GetModel(step.Workflow)
+			if model != "" {
+				modelInfo = fmt.Sprintf(" (%s)", model)
+			}
+			fmt.Printf("  %d. %s%s → %s\n", i+1, step.Workflow, modelInfo, step.NextStatus)
 		}
 		totalWorkflows += len(steps)
 		storiesWithWork++
