@@ -1,10 +1,10 @@
 # User Guide
 
-A practical guide to using `bmad-automate` for automating development workflows.
+A practical guide to using `bmaduum` for automating development workflows.
 
 ## Overview
 
-`bmad-automate` is a CLI tool that orchestrates Claude AI to automate repetitive development tasks. It handles:
+`bmaduum` is a CLI tool that orchestrates Claude AI to automate repetitive development tasks. It handles:
 
 - Creating story definitions from story keys
 - Implementing features based on story requirements
@@ -25,22 +25,22 @@ A practical guide to using `bmad-automate` for automating development workflows.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/bmad-automate.git
-cd bmad-automate
+git clone https://github.com/yourusername/bmaduum.git
+cd bmaduum
 
 # Build the binary
 just build
 # OR
-go build -o bmad-automate ./cmd/bmad-automate
+go build -o bmaduum ./cmd/bmaduum
 
 # (Optional) Install globally
-go install ./cmd/bmad-automate
+go install ./cmd/bmaduum
 ```
 
 ### Verify Installation
 
 ```bash
-bmad-automate --help
+bmaduum --help
 ```
 
 ## Basic Usage
@@ -52,7 +52,7 @@ bmad-automate --help
 Generate a story definition from a story key:
 
 ```bash
-bmad-automate create-story PROJ-123
+bmaduum create-story PROJ-123
 ```
 
 This runs Claude with a prompt to create the story definition based on your configured template.
@@ -62,7 +62,7 @@ This runs Claude with a prompt to create the story definition based on your conf
 Run the development workflow:
 
 ```bash
-bmad-automate dev-story PROJ-123
+bmaduum dev-story PROJ-123
 ```
 
 Claude will:
@@ -76,7 +76,7 @@ Claude will:
 Run code review on your changes:
 
 ```bash
-bmad-automate code-review PROJ-123
+bmaduum code-review PROJ-123
 ```
 
 Claude reviews the code and automatically fixes issues.
@@ -86,15 +86,15 @@ Claude reviews the code and automatically fixes issues.
 Create a commit and push to remote:
 
 ```bash
-bmad-automate git-commit PROJ-123
+bmaduum git-commit PROJ-123
 ```
 
 ### Status-Based Automation
 
-Instead of manually running each step, let `bmad-automate` determine what to do:
+Instead of manually running each step, let `bmaduum` determine what to do:
 
 ```bash
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 ```
 
 The `run` command now executes the **complete lifecycle** from the story's current status all the way to `done`. It auto-updates the status after each successful step and stops at completion or on the first failure.
@@ -112,7 +112,7 @@ The `run` command now executes the **complete lifecycle** from the story's curre
 The `run` command processes stories through their entire remaining lifecycle automatically:
 
 ```bash
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 ```
 
 **Example output:**
@@ -146,7 +146,7 @@ Story PROJ-123 completed successfully
 Preview what workflows will run without executing them:
 
 ```bash
-bmad-automate run --dry-run PROJ-123
+bmaduum run --dry-run PROJ-123
 ```
 
 **Example output:**
@@ -162,9 +162,9 @@ Dry run for story PROJ-123:
 Dry run is available for all lifecycle commands:
 
 ```bash
-bmad-automate run --dry-run PROJ-123           # Single story
-bmad-automate queue --dry-run PROJ-123 PROJ-124  # Multiple stories
-bmad-automate epic --dry-run 05                # All stories in epic
+bmaduum run --dry-run PROJ-123           # Single story
+bmaduum queue --dry-run PROJ-123 PROJ-124  # Multiple stories
+bmaduum epic --dry-run 05                # All stories in epic
 ```
 
 ### Error Recovery
@@ -186,11 +186,11 @@ When a workflow fails, the tool saves execution state so you can resume from the
 
 ```bash
 # Workflow fails at step 2 (dev-story)
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 # Error: workflow failed: dev-story returned exit code 1
 
 # Fix the issue, then re-run
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 # Continues from current status (no work is lost)
 ```
 
@@ -201,7 +201,7 @@ The state file is automatically cleared on successful completion.
 Process multiple stories at once:
 
 ```bash
-bmad-automate queue PROJ-123 PROJ-124 PROJ-125
+bmaduum queue PROJ-123 PROJ-124 PROJ-125
 ```
 
 The queue:
@@ -215,23 +215,27 @@ The queue:
 Use `--dry-run` to preview the full execution plan:
 
 ```bash
-bmad-automate queue --dry-run PROJ-123 PROJ-124 PROJ-125
+bmaduum queue --dry-run PROJ-123 PROJ-124 PROJ-125
 ```
 
-### Processing an Epic
+### Processing Epics
 
-Run all stories in an epic through their full lifecycle:
+Run all stories in one or more epics through their full lifecycle:
 
 ```bash
-bmad-automate epic 05
+# Single epic
+bmaduum epic 05
+
+# Multiple epics
+bmaduum epic 02 04 06
 ```
 
-This finds all stories matching the pattern `05-{N}-*` (e.g., `05-01-auth`, `05-02-dashboard`), sorts them by story number, and runs each through its complete lifecycle to completion.
+This finds all stories matching the pattern `{epic-id}-{N}-*` (e.g., `05-01-auth`, `05-02-dashboard`), sorts them by story number, and runs each through its complete lifecycle to completion.
 
 Use `--dry-run` to preview:
 
 ```bash
-bmad-automate epic --dry-run 05
+bmaduum epic --dry-run 02 04 06
 ```
 
 ### Ad-Hoc Prompts
@@ -239,8 +243,8 @@ bmad-automate epic --dry-run 05
 Run any prompt directly:
 
 ```bash
-bmad-automate raw "List all TODO comments in the codebase"
-bmad-automate raw "What tests are missing coverage?"
+bmaduum raw "List all TODO comments in the codebase"
+bmaduum raw "What tests are missing coverage?"
 ```
 
 ## Configuration
@@ -252,8 +256,8 @@ By default, configuration is loaded from `config/workflows.yaml`.
 Override with environment variable:
 
 ```bash
-export BMAD_CONFIG_PATH=/path/to/custom/config.yaml
-bmad-automate run PROJ-123
+export BMADUUM_CONFIG_PATH=/path/to/custom/config.yaml
+bmaduum run PROJ-123
 ```
 
 ### Customizing Workflows
@@ -320,7 +324,7 @@ claude:
 Or use environment variables:
 
 ```bash
-export BMAD_CLAUDE_PATH=/usr/local/bin/claude
+export BMADUUM_CLAUDE_PATH=/usr/local/bin/claude
 ```
 
 ## Sprint Status File
@@ -362,13 +366,13 @@ development_status:
 Run each step manually for full control:
 
 ```bash
-bmad-automate create-story PROJ-123
+bmaduum create-story PROJ-123
 # Review the story definition
-bmad-automate dev-story PROJ-123
+bmaduum dev-story PROJ-123
 # Test the implementation manually
-bmad-automate code-review PROJ-123
+bmaduum code-review PROJ-123
 # Verify fixes
-bmad-automate git-commit PROJ-123
+bmaduum git-commit PROJ-123
 ```
 
 ### Pattern 2: Status-Driven
@@ -377,10 +381,10 @@ Let the tool figure out what to do:
 
 ```bash
 # Run whatever step is needed next
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 
 # Run again after updating status
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 ```
 
 ### Pattern 3: Batch Sprint
@@ -388,7 +392,7 @@ bmad-automate run PROJ-123
 Process an entire sprint's stories:
 
 ```bash
-bmad-automate queue SPRINT-1 SPRINT-2 SPRINT-3 SPRINT-4 SPRINT-5
+bmaduum queue SPRINT-1 SPRINT-2 SPRINT-3 SPRINT-4 SPRINT-5
 ```
 
 ### Pattern 4: Epic Processing
@@ -396,7 +400,7 @@ bmad-automate queue SPRINT-1 SPRINT-2 SPRINT-3 SPRINT-4 SPRINT-5
 Process all stories in an epic:
 
 ```bash
-bmad-automate epic 05
+bmaduum epic 05
 ```
 
 ### Pattern 5: Investigation
@@ -405,13 +409,13 @@ Use raw prompts for ad-hoc tasks:
 
 ```bash
 # Understand the codebase
-bmad-automate raw "Explain the authentication flow"
+bmaduum raw "Explain the authentication flow"
 
 # Find issues
-bmad-automate raw "What tests have the most failures?"
+bmaduum raw "What tests have the most failures?"
 
 # Generate reports
-bmad-automate raw "Create a summary of recent changes"
+bmaduum raw "Create a summary of recent changes"
 ```
 
 ## Understanding Output
@@ -489,7 +493,7 @@ You can safely delete this file to force a fresh start from the story's current 
 Error: failed to start claude: exec: "claude": executable file not found in $PATH
 ```
 
-Solution: Install Claude CLI or set `BMAD_CLAUDE_PATH`.
+Solution: Install Claude CLI or set `BMADUUM_CLAUDE_PATH`.
 
 **Config not found:**
 
@@ -497,7 +501,7 @@ Solution: Install Claude CLI or set `BMAD_CLAUDE_PATH`.
 Error: error loading config: open config/workflows.yaml: no such file or directory
 ```
 
-Solution: Create the config file or set `BMAD_CONFIG_PATH`.
+Solution: Create the config file or set `BMADUUM_CONFIG_PATH`.
 
 **Story not in status file:**
 
@@ -522,7 +526,7 @@ Solution: Use a valid status: `backlog`, `ready-for-dev`, `in-progress`, `review
 Begin with single story commands to understand the workflow:
 
 ```bash
-bmad-automate create-story TEST-001
+bmaduum create-story TEST-001
 ```
 
 ### 2. Review Output
@@ -558,5 +562,5 @@ When a queue stops on failure:
 Before starting a story, use raw prompts to understand the codebase:
 
 ```bash
-bmad-automate raw "What files would I need to change to add user authentication?"
+bmaduum raw "What files would I need to change to add user authentication?"
 ```

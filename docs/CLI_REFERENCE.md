@@ -1,11 +1,11 @@
 # CLI Reference
 
-Complete command-line interface reference for `bmad-automate`.
+Complete command-line interface reference for `bmaduum`.
 
 ## Synopsis
 
 ```
-bmad-automate [command] [arguments] [flags]
+bmaduum [command] [arguments] [flags]
 ```
 
 ## Description
@@ -16,7 +16,7 @@ BMAD Automation CLI orchestrates Claude AI to run development workflows includin
 
 All commands:
 
-- Load configuration from `config/workflows.yaml` (or `BMAD_CONFIG_PATH`)
+- Load configuration from `config/workflows.yaml` (or `BMADUUM_CONFIG_PATH`)
 - Execute Claude CLI with `--dangerously-skip-permissions` and `--output-format stream-json`
 - Display styled terminal output with progress indicators
 - Return appropriate exit codes (0 for success, non-zero for failure)
@@ -32,7 +32,7 @@ Create a story definition from a story key.
 **Usage:**
 
 ```bash
-bmad-automate create-story <story-key>
+bmaduum create-story <story-key>
 ```
 
 **Arguments:**
@@ -43,7 +43,7 @@ bmad-automate create-story <story-key>
 **Example:**
 
 ```bash
-bmad-automate create-story PROJ-123
+bmaduum create-story PROJ-123
 ```
 
 **Behavior:**
@@ -62,7 +62,7 @@ Implement a story by running the development workflow.
 **Usage:**
 
 ```bash
-bmad-automate dev-story <story-key>
+bmaduum dev-story <story-key>
 ```
 
 **Arguments:**
@@ -73,7 +73,7 @@ bmad-automate dev-story <story-key>
 **Example:**
 
 ```bash
-bmad-automate dev-story PROJ-123
+bmaduum dev-story PROJ-123
 ```
 
 **Behavior:**
@@ -91,7 +91,7 @@ Run code review on a story's changes.
 **Usage:**
 
 ```bash
-bmad-automate code-review <story-key>
+bmaduum code-review <story-key>
 ```
 
 **Arguments:**
@@ -102,7 +102,7 @@ bmad-automate code-review <story-key>
 **Example:**
 
 ```bash
-bmad-automate code-review PROJ-123
+bmaduum code-review PROJ-123
 ```
 
 **Behavior:**
@@ -120,7 +120,7 @@ Commit and push changes for a story.
 **Usage:**
 
 ```bash
-bmad-automate git-commit <story-key>
+bmaduum git-commit <story-key>
 ```
 
 **Arguments:**
@@ -131,7 +131,7 @@ bmad-automate git-commit <story-key>
 **Example:**
 
 ```bash
-bmad-automate git-commit PROJ-123
+bmaduum git-commit PROJ-123
 ```
 
 **Behavior:**
@@ -149,7 +149,7 @@ Execute the full lifecycle for a story from its current status to done.
 **Usage:**
 
 ```bash
-bmad-automate run [--dry-run] <story-key>
+bmaduum run [--dry-run] <story-key>
 ```
 
 **Arguments:**
@@ -166,10 +166,10 @@ bmad-automate run [--dry-run] <story-key>
 
 ```bash
 # Run full lifecycle
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 
 # Preview what would run
-bmad-automate run --dry-run PROJ-123
+bmaduum run --dry-run PROJ-123
 ```
 
 **Lifecycle Routing:**
@@ -211,7 +211,7 @@ Run full lifecycle for multiple stories in batch.
 **Usage:**
 
 ```bash
-bmad-automate queue [--dry-run] <story-key> [story-key...]
+bmaduum queue [--dry-run] <story-key> [story-key...]
 ```
 
 **Arguments:**
@@ -228,10 +228,10 @@ bmad-automate queue [--dry-run] <story-key> [story-key...]
 
 ```bash
 # Run full lifecycle for each story
-bmad-automate queue PROJ-123 PROJ-124 PROJ-125
+bmaduum queue PROJ-123 PROJ-124 PROJ-125
 
 # Preview what would run
-bmad-automate queue --dry-run PROJ-123 PROJ-124 PROJ-125
+bmaduum queue --dry-run PROJ-123 PROJ-124 PROJ-125
 ```
 
 **Behavior:**
@@ -285,32 +285,35 @@ Total: 7 workflows across 2 stories (1 already complete)
 
 ### epic
 
-Run full lifecycle for all stories in an epic.
+Run full lifecycle for all stories in one or more epics.
 
 **Usage:**
 
 ```bash
-bmad-automate epic [--dry-run] <epic-id>
+bmaduum epic [--dry-run] <epic-id> [epic-id...]
 ```
 
 **Arguments:**
 | Argument | Required | Description |
 |----------|----------|-------------|
-| epic-id | Yes | The epic identifier |
+| epic-id | Yes (1+) | One or more epic identifiers |
 
 **Flags:**
 | Flag | Description |
 |------|-------------|
 | `--dry-run` | Preview workflow sequence without execution |
 
-**Example:**
+**Examples:**
 
 ```bash
-# Run full lifecycle for all stories in epic
-bmad-automate epic 05
+# Run full lifecycle for all stories in a single epic
+bmaduum epic 05
+
+# Run multiple epics
+bmaduum epic 02 04 06
 
 # Preview what would run
-bmad-automate epic --dry-run 05
+bmaduum epic --dry-run 02 04 06
 ```
 
 **Story Discovery:**
@@ -331,11 +334,12 @@ Stories are sorted by story number and processed in order.
 
 **Behavior:**
 
-1. Finds all stories matching the epic pattern
-2. Sorts by story number
+1. Finds all stories matching the epic pattern(s)
+2. Sorts by story number within each epic
 3. Runs each story through its **full lifecycle** to completion
 4. Auto-updates status after each successful workflow step
 5. Stops on first failure
+6. Processes multiple epics in the order specified
 
 ---
 
@@ -346,7 +350,7 @@ Execute an arbitrary prompt with Claude.
 **Usage:**
 
 ```bash
-bmad-automate raw <prompt>
+bmaduum raw <prompt>
 ```
 
 **Arguments:**
@@ -357,8 +361,8 @@ bmad-automate raw <prompt>
 **Example:**
 
 ```bash
-bmad-automate raw "List all Go files in the project"
-bmad-automate raw Explain the architecture of this codebase
+bmaduum raw "List all Go files in the project"
+bmaduum raw Explain the architecture of this codebase
 ```
 
 **Behavior:**
@@ -383,8 +387,8 @@ bmad-automate raw Explain the architecture of this codebase
 
 | Variable           | Description                | Default                   |
 | ------------------ | -------------------------- | ------------------------- |
-| `BMAD_CONFIG_PATH` | Path to configuration file | `./config/workflows.yaml` |
-| `BMAD_CLAUDE_PATH` | Path to Claude binary      | `claude` (from PATH)      |
+| `BMADUUM_CONFIG_PATH` | Path to configuration file | `./config/workflows.yaml` |
+| `BMADUUM_CLAUDE_PATH` | Path to claude command/binary | `claude` (from PATH)  |
 
 ---
 
@@ -506,39 +510,39 @@ The lifecycle executor persists execution state for error recovery.
 
 ```bash
 # Step-by-step workflow
-bmad-automate create-story PROJ-123
-bmad-automate dev-story PROJ-123
-bmad-automate code-review PROJ-123
-bmad-automate git-commit PROJ-123
+bmaduum create-story PROJ-123
+bmaduum dev-story PROJ-123
+bmaduum code-review PROJ-123
+bmaduum git-commit PROJ-123
 ```
 
 ### Status-Based Automation
 
 ```bash
 # Let the tool determine the right workflow
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 
 # Process multiple stories
-bmad-automate queue PROJ-123 PROJ-124 PROJ-125
+bmaduum queue PROJ-123 PROJ-124 PROJ-125
 
 # Process an entire epic
-bmad-automate epic 05
+bmaduum epic 05
 ```
 
 ### Ad-Hoc Tasks
 
 ```bash
 # Run arbitrary prompts
-bmad-automate raw "What is the test coverage?"
-bmad-automate raw "Find all TODO comments"
+bmaduum raw "What is the test coverage?"
+bmaduum raw "Find all TODO comments"
 ```
 
 ### Custom Configuration
 
 ```bash
 # Use custom config file
-BMAD_CONFIG_PATH=/path/to/config.yaml bmad-automate run PROJ-123
+BMADUUM_CONFIG_PATH=/path/to/config.yaml bmaduum run PROJ-123
 
 # Use custom Claude binary
-BMAD_CLAUDE_PATH=/usr/local/bin/claude bmad-automate dev-story PROJ-123
+BMADUUM_CLAUDE_PATH=/usr/local/bin/claude bmaduum dev-story PROJ-123
 ```

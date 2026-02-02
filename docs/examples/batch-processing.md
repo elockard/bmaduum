@@ -9,7 +9,7 @@ Multi-story and epic processing patterns.
 Run full lifecycle for each story in sequence.
 
 ```bash
-bmad-automate queue AUTH-042 AUTH-043 AUTH-044
+bmaduum queue AUTH-042 AUTH-043 AUTH-044
 ```
 
 Each story runs through its complete lifecycle. Skips stories already at `done`. Stops on first failure.
@@ -38,7 +38,7 @@ Summary:
 See the full execution plan before running.
 
 ```bash
-bmad-automate queue --dry-run AUTH-042 AUTH-043 AUTH-044
+bmaduum queue --dry-run AUTH-042 AUTH-043 AUTH-044
 ```
 
 **Example output:**
@@ -70,10 +70,22 @@ Total: 7 workflows across 2 stories (1 already complete)
 Run all stories matching an epic pattern.
 
 ```bash
-bmad-automate epic 05
+bmaduum epic 05
 ```
 
 Finds stories matching `05-*` (e.g., `05-01-auth`, `05-02-dashboard`), sorts by story number, runs each through its complete lifecycle.
+
+---
+
+## Process Multiple Epics
+
+Run multiple epics in sequence.
+
+```bash
+bmaduum epic 02 04 06
+```
+
+Processes epic 02, then 04, then 06. Each epic's stories are run to completion before moving to the next epic.
 
 ---
 
@@ -82,7 +94,11 @@ Finds stories matching `05-*` (e.g., `05-01-auth`, `05-02-dashboard`), sorts by 
 See what stories would be processed and their workflows.
 
 ```bash
-bmad-automate epic --dry-run 05
+# Single epic
+bmaduum epic --dry-run 05
+
+# Multiple epics
+bmaduum epic --dry-run 02 04 06
 ```
 
 Shows all matching stories and their remaining lifecycle steps.
@@ -99,7 +115,7 @@ When processing stories with different statuses, each runs only its remaining wo
 # AUTH-043: review
 # AUTH-044: done
 
-bmad-automate queue AUTH-042 AUTH-043 AUTH-044
+bmaduum queue AUTH-042 AUTH-043 AUTH-044
 ```
 
 **Result:**

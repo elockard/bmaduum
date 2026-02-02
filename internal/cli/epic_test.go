@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"bmad-automate/internal/config"
-	"bmad-automate/internal/output"
-	"bmad-automate/internal/status"
+	"bmaduum/internal/config"
+	"bmaduum/internal/output"
+	"bmaduum/internal/status"
 )
 
 // TestEpicCommand_FullLifecycleExecution tests that epic command executes the full lifecycle for each story
@@ -229,6 +229,132 @@ func TestEpicCommand_NoStoriesFoundReturnsError(t *testing.T) {
 
 	// No workflows should have been executed
 	assert.Empty(t, mockRunner.ExecutedWorkflows)
+}
+
+// TestEpicCommand_MultipleEpics tests that epic command processes multiple epics
+func TestEpicCommand_MultipleEpics(t *testing.T) {
+	tests := []struct {
+		name              string
+		epicIDs           []string
+		statusYAML        string
+		expectedWorkflows []string
+		expectedStatuses  []StatusUpdate
+		expectError       bool
+	}{
+		{
+			name:    "multiple epics 2 and 3",
+			epicIDs: []string{"2", "3"},
+			statusYAML: `development_status:
+  2-1-first: backlog
+  2-2-second: backlog
+  3-1-third: backlog
+  3-2-fourth: backlog`,
+			expectedWorkflows: []string{
+				// Epic 2 stories
+				"create-story", "dev-story", "code-review", "git-commit",
+				"create-story", "dev-story", "code-review", "git-commit",
+				// Epic 3 stories
+				"create-story", "dev-story", "code-review", "git-commit",
+				"create-story", "dev-story", "code-review", "git-commit",
+			},
+			expectedStatuses: []StatusUpdate{
+				{StoryKey: "2-1-first", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "2-1-first", NewStatus: status.StatusReview},
+				{StoryKey: "2-1-first", NewStatus: status.StatusDone},
+				{StoryKey: "2-1-first", NewStatus: status.StatusDone},
+				{StoryKey: "2-2-second", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "2-2-second", NewStatus: status.StatusReview},
+				{StoryKey: "2-2-second", NewStatus: status.StatusDone},
+				{StoryKey: "2-2-second", NewStatus: status.StatusDone},
+				{StoryKey: "3-1-third", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "3-1-third", NewStatus: status.StatusReview},
+				{StoryKey: "3-1-third", NewStatus: status.StatusDone},
+				{StoryKey: "3-1-third", NewStatus: status.StatusDone},
+				{StoryKey: "3-2-fourth", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "3-2-fourth", NewStatus: status.StatusReview},
+				{StoryKey: "3-2-fourth", NewStatus: status.StatusDone},
+				{StoryKey: "3-2-fourth", NewStatus: status.StatusDone},
+			},
+			expectError: false,
+		},
+		{
+			name:    "three epics",
+			epicIDs: []string{"1", "2", "3"},
+			statusYAML: `development_status:
+  1-1-first: backlog
+  2-1-second: backlog
+  3-1-third: backlog`,
+			expectedWorkflows: []string{
+				"create-story", "dev-story", "code-review", "git-commit",
+				"create-story", "dev-story", "code-review", "git-commit",
+				"create-story", "dev-story", "code-review", "git-commit",
+			},
+			expectedStatuses: []StatusUpdate{
+				{StoryKey: "1-1-first", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "1-1-first", NewStatus: status.StatusReview},
+				{StoryKey: "1-1-first", NewStatus: status.StatusDone},
+				{StoryKey: "1-1-first", NewStatus: status.StatusDone},
+				{StoryKey: "2-1-second", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "2-1-second", NewStatus: status.StatusReview},
+				{StoryKey: "2-1-second", NewStatus: status.StatusDone},
+				{StoryKey: "2-1-second", NewStatus: status.StatusDone},
+				{StoryKey: "3-1-third", NewStatus: status.StatusReadyForDev},
+				{StoryKey: "3-1-third", NewStatus: status.StatusReview},
+				{StoryKey: "3-1-third", NewStatus: status.StatusDone},
+				{StoryKey: "3-1-third", NewStatus: status.StatusDone},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			createSprintStatusFile(t, tmpDir, tt.statusYAML)
+
+			mockRunner := &MockWorkflowRunner{}
+			mockWriter := &MockStatusWriter{}
+			statusReader := status.NewReader(tmpDir)
+			buf := &bytes.Buffer{}
+			printer := output.NewPrinterWithWriter(buf)
+
+			app := &App{
+				Config:       config.DefaultConfig(),
+				StatusReader: statusReader,
+				StatusWriter: mockWriter,
+				Runner:       mockRunner,
+				Printer:      printer,
+			}
+
+			rootCmd := NewRootCommand(app)
+			outBuf := &bytes.Buffer{}
+			rootCmd.SetOut(outBuf)
+			rootCmd.SetErr(outBuf)
+			rootCmd.SetArgs(append([]string{"epic"}, tt.epicIDs...))
+
+			err := rootCmd.Execute()
+
+			if tt.expectError {
+				require.Error(t, err)
+				code, ok := IsExitError(err)
+				assert.True(t, ok, "error should be an ExitError")
+				assert.Equal(t, 1, code)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, tt.expectedWorkflows, mockRunner.ExecutedWorkflows,
+				"workflows should be executed in lifecycle order for all epics")
+
+			if tt.expectedStatuses != nil {
+				require.Len(t, mockWriter.Updates, len(tt.expectedStatuses))
+				for i, expected := range tt.expectedStatuses {
+					assert.Equal(t, expected.StoryKey, mockWriter.Updates[i].StoryKey)
+					assert.Equal(t, expected.NewStatus, mockWriter.Updates[i].NewStatus)
+				}
+			}
+		})
+	}
 }
 
 // Note: Legacy tests removed - obsolete after lifecycle executor change.

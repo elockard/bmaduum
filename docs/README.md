@@ -1,6 +1,6 @@
-# bmad-automate Documentation
+# bmaduum Documentation
 
-Comprehensive documentation for the `bmad-automate` CLI tool.
+Comprehensive documentation for the `bmaduum` CLI tool.
 
 ## Documentation Index
 
@@ -31,12 +31,12 @@ Comprehensive documentation for the `bmad-automate` CLI tool.
 
 ```bash
 # Clone and build
-git clone https://github.com/yourusername/bmad-automate.git
-cd bmad-automate
+git clone https://github.com/yourusername/bmaduum.git
+cd bmaduum
 just build
 
 # Or install globally
-go install ./cmd/bmad-automate
+go install ./cmd/bmaduum
 ```
 
 ## Quick Start
@@ -44,19 +44,20 @@ go install ./cmd/bmad-automate
 ```bash
 # Process a story through its full lifecycle to done
 # (automatically runs: create-story -> dev-story -> code-review -> git-commit)
-bmad-automate run PROJ-123
+bmaduum run PROJ-123
 
 # Preview what workflows would run without executing
-bmad-automate run --dry-run PROJ-123
+bmaduum run --dry-run PROJ-123
 
 # Process multiple stories through their lifecycles
-bmad-automate queue PROJ-123 PROJ-124 PROJ-125
+bmaduum queue PROJ-123 PROJ-124 PROJ-125
 
-# Process an entire epic
-bmad-automate epic 05
+# Process one or more epics
+bmaduum epic 05
+bmaduum epic 02 04 06
 
 # Run an arbitrary prompt
-bmad-automate raw "What files need tests?"
+bmaduum raw "What files need tests?"
 ```
 
 ## Commands Overview
@@ -97,7 +98,7 @@ See [User Guide](USER_GUIDE.md#configuration) for complete configuration options
 ## Architecture Overview
 
 ```
-cmd/bmad-automate/main.go
+cmd/bmaduum/main.go
          │
          ▼
     internal/cli (Cobra commands)
