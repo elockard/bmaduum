@@ -25,53 +25,156 @@ All commands:
 
 ## Commands
 
-### story
+### create-story
 
-Run full lifecycle for one or more stories from their current status to done.
+Create a story definition from a story key.
 
 **Usage:**
 
 ```bash
-bmaduum story [--dry-run] [--auto-retry] [--tui] <story-key> [story-key...]
+bmaduum create-story <story-key>
 ```
 
 **Arguments:**
 | Argument | Required | Description |
 |----------|----------|-------------|
-| story-key | Yes (1+) | One or more story identifiers |
+| story-key | Yes | The story identifier (e.g., `PROJ-123`) |
+
+**Example:**
+
+```bash
+bmaduum create-story PROJ-123
+```
+
+**Behavior:**
+
+1. Loads `create-story` workflow prompt from configuration
+2. Expands `{{.StoryKey}}` template with provided story key
+3. Executes Claude with the expanded prompt
+4. Displays streaming output
+
+---
+
+### dev-story
+
+Implement a story by running the development workflow.
+
+**Usage:**
+
+```bash
+bmaduum dev-story <story-key>
+```
+
+**Arguments:**
+| Argument | Required | Description |
+|----------|----------|-------------|
+| story-key | Yes | The story identifier |
+
+**Example:**
+
+```bash
+bmaduum dev-story PROJ-123
+```
+
+**Behavior:**
+
+1. Loads `dev-story` workflow prompt
+2. Executes Claude to implement the story
+3. Claude runs tests after each implementation step
+
+---
+
+### code-review
+
+Run code review on a story's changes.
+
+**Usage:**
+
+```bash
+bmaduum code-review <story-key>
+```
+
+**Arguments:**
+| Argument | Required | Description |
+|----------|----------|-------------|
+| story-key | Yes | The story identifier |
+
+**Example:**
+
+```bash
+bmaduum code-review PROJ-123
+```
+
+**Behavior:**
+
+1. Loads `code-review` workflow prompt
+2. Executes Claude to review code changes
+3. Automatically applies fixes when issues are found
+
+---
+
+### git-commit
+
+Commit and push changes for a story.
+
+**Usage:**
+
+```bash
+bmaduum git-commit <story-key>
+```
+
+**Arguments:**
+| Argument | Required | Description |
+|----------|----------|-------------|
+| story-key | Yes | The story identifier |
+
+**Example:**
+
+```bash
+bmaduum git-commit PROJ-123
+```
+
+**Behavior:**
+
+1. Loads `git-commit` workflow prompt
+2. Executes Claude to create a commit with conventional commit format
+3. Pushes to the current branch
+
+---
+
+### run
+
+Execute the full lifecycle for a story from its current status to done.
+
+**Usage:**
+
+```bash
+bmaduum run [--dry-run] <story-key>
+```
+
+**Arguments:**
+| Argument | Required | Description |
+|----------|----------|-------------|
+| story-key | Yes | The story identifier |
 
 **Flags:**
 | Flag | Description |
 |------|-------------|
 | `--dry-run` | Preview workflow sequence without execution |
-| `--auto-retry` | Automatically retry on rate limit errors |
-| `--tui` | Enable interactive TUI mode (single story only) |
 
-**Examples:**
+**Example:**
 
 ```bash
-# Run full lifecycle for a single story
-bmaduum story PROJ-123
-
-# Run full lifecycle for multiple stories
-bmaduum story PROJ-123 PROJ-124 PROJ-125
+# Run full lifecycle
+bmaduum run PROJ-123
 
 # Preview what would run
-bmaduum story --dry-run PROJ-123 PROJ-124 PROJ-125
-
-# Enable TUI mode
-bmaduum story --tui PROJ-123
+bmaduum run --dry-run PROJ-123
 ```
 
-**Behavior:**
-
-1. Processes each story through its **full lifecycle** to completion
-2. Auto-updates status after each successful workflow step
-3. Skips stories with status `done`
-4. Stops on first failure
-5. For multiple stories, shows progress indicators
-
 **Lifecycle Routing:**
+
+The `run` command executes all remaining workflows to completion:
 
 | Story Status    | Remaining Lifecycle                                            |
 | --------------- | -------------------------------------------------------------- |
@@ -81,16 +184,82 @@ bmaduum story --tui PROJ-123
 | `review`        | code-review -> git-commit -> done                              |
 | `done`          | No action (story already complete)                             |
 
-**Dry Run Output (single story):**
+**Behavior:**
+
+1. Reads story status from `_bmad-output/implementation-artifacts/sprint-status.yaml`
+2. Determines remaining lifecycle steps based on status
+3. Executes each workflow in sequence
+4. Auto-updates status in `sprint-status.yaml` after each successful step
+5. Stops at `done` or on first failure
+
+**Dry Run Output:**
 
 ```
 Dry run for story PROJ-123:
-  1. dev-story -> review
-  2. code-review -> done
-  3. git-commit -> done
+  1. create-story -> ready-for-dev
+  2. dev-story -> review
+  3. code-review -> done
+  4. git-commit -> done
 ```
 
-**Dry Run Output (multiple stories):**
+---
+
+### queue
+
+Run full lifecycle for multiple stories in batch.
+
+**Usage:**
+
+```bash
+bmaduum queue [--dry-run] <story-key> [story-key...]
+```
+
+**Arguments:**
+| Argument | Required | Description |
+|----------|----------|-------------|
+| story-key | Yes | One or more story identifiers |
+
+**Flags:**
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Preview workflow sequence without execution |
+
+**Example:**
+
+```bash
+# Run full lifecycle for each story
+bmaduum queue PROJ-123 PROJ-124 PROJ-125
+
+# Preview what would run
+bmaduum queue --dry-run PROJ-123 PROJ-124 PROJ-125
+```
+
+**Behavior:**
+
+1. Processes each story through its **full lifecycle** to completion
+2. Auto-updates status after each successful workflow step
+3. Skips stories with status `done`
+4. Stops on first failure
+5. Displays summary with timing for each story
+
+**Output:**
+
+```
+Queue: 3 stories [PROJ-123, PROJ-124, PROJ-125]
+
+[1/3] PROJ-123
+  ... workflow output ...
+
+[2/3] PROJ-124
+  ... workflow output ...
+
+Summary:
+  PROJ-123  ✓  1m 23s
+  PROJ-124  ✓  2m 45s
+  PROJ-125  ○  skipped (done)
+```
+
+**Dry Run Output:**
 
 ```
 Dry run for 3 stories:
@@ -116,28 +285,23 @@ Total: 7 workflows across 2 stories (1 already complete)
 
 ### epic
 
-Run full lifecycle for all stories in one or more epics, or all active epics.
+Run full lifecycle for all stories in one or more epics.
 
 **Usage:**
 
 ```bash
-# Single or multiple epics
-bmaduum epic [--dry-run] [--auto-retry] <epic-id> [epic-id...]
-
-# All active epics
-bmaduum epic [--dry-run] [--auto-retry] all
+bmaduum epic [--dry-run] <epic-id> [epic-id...]
 ```
 
 **Arguments:**
 | Argument | Required | Description |
 |----------|----------|-------------|
-| epic-id | Yes (1+) | One or more epic identifiers, or `all` for all active epics |
+| epic-id | Yes (1+) | One or more epic identifiers |
 
 **Flags:**
 | Flag | Description |
 |------|-------------|
 | `--dry-run` | Preview workflow sequence without execution |
-| `--auto-retry` | Automatically retry on rate limit errors |
 
 **Examples:**
 
@@ -148,12 +312,8 @@ bmaduum epic 05
 # Run multiple epics
 bmaduum epic 02 04 06
 
-# Run all active epics
-bmaduum epic all
-
 # Preview what would run
 bmaduum epic --dry-run 02 04 06
-bmaduum epic --dry-run all
 ```
 
 **Story Discovery:**
@@ -172,10 +332,6 @@ For epic `05`, this matches:
 
 Stories are sorted by story number and processed in order.
 
-**When using `all`:**
-
-The `all` argument auto-discovers all epics with non-completed stories and processes them in numerical order.
-
 **Behavior:**
 
 1. Finds all stories matching the epic pattern(s)
@@ -184,174 +340,6 @@ The `all` argument auto-discovers all epics with non-completed stories and proce
 4. Auto-updates status after each successful workflow step
 5. Stops on first failure
 6. Processes multiple epics in the order specified
-
----
-
-### workflow (Advanced)
-
-Run individual BMAD workflow steps directly. These are the same workflow commands used in BMAD-METHOD and are automatically executed by `story` and `epic` commands.
-
-**Usage:**
-
-```bash
-bmaduum workflow <workflow-name> <story-key>
-bmaduum workflow <subcommand> --help
-```
-
-**Available workflows:**
-- `create-story`: Create a story definition from backlog
-- `dev-story`: Implement a story (ready-for-dev or in-progress)
-- `code-review`: Review code changes (review status)
-- `git-commit`: Commit and push changes after review
-
-**Subcommands:**
-| Subcommand | Description |
-|------------|-------------|
-| `create-story` | Create a story definition from backlog |
-| `dev-story` | Implement a story through development |
-| `code-review` | Review code changes for a story |
-| `git-commit` | Commit and push changes for a story |
-
-**Flags:**
-| Flag | Description |
-|------|-------------|
-| `--auto-retry` | Automatically retry on rate limit errors |
-
-**Examples:**
-
-```bash
-# Using parent command syntax
-bmaduum workflow create-story PROJ-123
-bmaduum workflow dev-story PROJ-123
-bmaduum workflow code-review PROJ-123
-bmaduum workflow git-commit PROJ-123
-
-# Using subcommand syntax directly
-bmaduum workflow create-story --help
-```
-
-**When to use:**
-
-- A workflow fails and you want to retry just that step
-- You need to run a step out of the normal sequence for debugging
-- You're testing or developing workflow prompts
-
-**Note:** Most users should use `story` or `epic` commands instead, which automatically run the appropriate workflows based on story status.
-
-#### create-story
-
-Create a story definition from a story key.
-
-**Usage:**
-
-```bash
-bmaduum workflow create-story <story-key>
-```
-
-**Arguments:**
-| Argument | Required | Description |
-|----------|----------|-------------|
-| story-key | Yes | The story identifier (e.g., `PROJ-123`) |
-
-**Example:**
-
-```bash
-bmaduum workflow create-story PROJ-123
-```
-
-**Behavior:**
-
-1. Loads `create-story` workflow prompt from configuration
-2. Expands `{{.StoryKey}}` template with provided story key
-3. Executes Claude with the expanded prompt
-4. Displays streaming output
-
----
-
-#### dev-story
-
-Implement a story by running the development workflow.
-
-**Usage:**
-
-```bash
-bmaduum workflow dev-story <story-key>
-```
-
-**Arguments:**
-| Argument | Required | Description |
-|----------|----------|-------------|
-| story-key | Yes | The story identifier |
-
-**Example:**
-
-```bash
-bmaduum workflow dev-story PROJ-123
-```
-
-**Behavior:**
-
-1. Loads `dev-story` workflow prompt
-2. Executes Claude to implement the story
-3. Claude runs tests after each implementation step
-
----
-
-#### code-review
-
-Run code review on a story's changes.
-
-**Usage:**
-
-```bash
-bmaduum workflow code-review <story-key>
-```
-
-**Arguments:**
-| Argument | Required | Description |
-|----------|----------|-------------|
-| story-key | Yes | The story identifier |
-
-**Example:**
-
-```bash
-bmaduum workflow code-review PROJ-123
-```
-
-**Behavior:**
-
-1. Loads `code-review` workflow prompt
-2. Executes Claude to review code changes
-3. Automatically applies fixes when issues are found
-
----
-
-#### git-commit
-
-Commit and push changes for a story.
-
-**Usage:**
-
-```bash
-bmaduum workflow git-commit <story-key>
-```
-
-**Arguments:**
-| Argument | Required | Description |
-|----------|----------|-------------|
-| story-key | Yes | The story identifier |
-
-**Example:**
-
-```bash
-bmaduum workflow git-commit PROJ-123
-```
-
-**Behavior:**
-
-1. Loads `git-commit` workflow prompt
-2. Executes Claude to create a commit with conventional commit format
-3. Pushes to the current branch
 
 ---
 
@@ -382,25 +370,6 @@ bmaduum raw Explain the architecture of this codebase
 1. Joins all arguments into a single prompt
 2. Executes Claude directly with the prompt
 3. Does not use any workflow templates
-
----
-
-### version
-
-Display version information.
-
-**Usage:**
-
-```bash
-bmaduum version
-```
-
-**Example:**
-
-```bash
-bmaduum version
-# Output: bmaduum 1.0.0 (build: abc1234)
-```
 
 ---
 
@@ -467,7 +436,7 @@ output:
 
 ## Sprint Status File
 
-The `story` and `epic` commands read story status from:
+The `run`, `queue`, and `epic` commands read story status from:
 
 ```
 _bmad-output/implementation-artifacts/sprint-status.yaml
@@ -531,89 +500,33 @@ The lifecycle executor persists execution state for error recovery.
 
 - The state file is optional - deleting it forces a fresh start from current status
 - State is written atomically (temp file + rename) to prevent corruption
-- Each story has its own state; story/epic commands process stories sequentially
+- Each story has its own state; queue/epic commands process stories sequentially
 
 ---
 
 ## Examples
 
-### TUI Mode
-
-The TUI (Terminal User Interface) mode provides an interactive, visual experience inspired by Claude Code's interface:
+### Basic Workflow
 
 ```bash
-# Run with interactive TUI
-bmaduum story --tui PROJ-123
+# Step-by-step workflow
+bmaduum create-story PROJ-123
+bmaduum dev-story PROJ-123
+bmaduum code-review PROJ-123
+bmaduum git-commit PROJ-123
 ```
 
-**TUI Features:**
-
-- **Header bar** - Shows current step, story key, model, and elapsed time
-- **Token-by-token streaming** - Text appears character by character
-- **Tool visualization** - Tool invocations shown with ⏺ symbol, results with ⎿
-- **Thinking indicator** - Animated spinner during processing gaps
-- **Auto-scroll** - Content automatically scrolls to show latest output
-- **Mouse scrolling** - Scroll back to see earlier content
-
-**TUI Controls:**
-
-| Key | Action |
-|-----|--------|
-| `Ctrl+C` | Quit the application |
-| Mouse wheel | Scroll through output |
-
-**TUI Layout:**
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ ⚡ bmaduum │ Step 2/4: dev-story │ PROJ-123 │ claude-4 │ ⏱️ 02:34   │
-├──────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  I'll implement the JWT authentication system. Let me start by       │
-│  examining the current project structure...                          │
-│                                                                      │
-│  ⏺ Bash(ls -la src/)                                                 │
-│  ⎿  total 64                                                         │
-│     drwxr-xr-x  10 user staff   320 Jan  1 00:00 .                   │
-│                                                                      │
-│  ⏺ Read(src/auth/types.ts)                                           │
-│  ⎿  export interface AuthConfig {                                    │
-│       tokenExpiry: number;                                           │
-│     }                                                                │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-**Notes:**
-
-- TUI mode is only available for single story execution
-- The TUI requires a terminal that supports alternate screen mode
-- All content is preserved and can be scrolled through after completion
-
-### Status-Based Automation (Recommended)
+### Status-Based Automation
 
 ```bash
-# Let the tool determine the right workflow for a single story
-bmaduum story PROJ-123
+# Let the tool determine the right workflow
+bmaduum run PROJ-123
 
 # Process multiple stories
-bmaduum story PROJ-123 PROJ-124 PROJ-125
+bmaduum queue PROJ-123 PROJ-124 PROJ-125
 
 # Process an entire epic
 bmaduum epic 05
-
-# Process all active epics
-bmaduum epic all
-```
-
-### Individual Workflow Steps (Advanced)
-
-```bash
-# Run a specific workflow step
-bmaduum workflow create-story PROJ-123
-bmaduum workflow dev-story PROJ-123
-bmaduum workflow code-review PROJ-123
-bmaduum workflow git-commit PROJ-123
 ```
 
 ### Ad-Hoc Tasks
@@ -628,8 +541,8 @@ bmaduum raw "Find all TODO comments"
 
 ```bash
 # Use custom config file
-BMADUUM_CONFIG_PATH=/path/to/config.yaml bmaduum story PROJ-123
+BMADUUM_CONFIG_PATH=/path/to/config.yaml bmaduum run PROJ-123
 
 # Use custom Claude binary
-BMADUUM_CLAUDE_PATH=/usr/local/bin/claude bmaduum workflow dev-story PROJ-123
+BMADUUM_CLAUDE_PATH=/usr/local/bin/claude bmaduum dev-story PROJ-123
 ```
