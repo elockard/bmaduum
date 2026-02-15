@@ -44,6 +44,7 @@ Examples:
 
 			// Create lifecycle executor with app dependencies
 			executor := lifecycle.NewExecutor(app.Runner, app.StatusReader, app.StatusWriter)
+			executor.SetRouter(app.Router)
 
 			// Handle dry-run mode
 			if dryRun {

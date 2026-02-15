@@ -1,0 +1,2 @@
+phase,workflow,agent,command,trigger_status,next_status
+3,,SM,/create-story,backlog,ready-for-dev

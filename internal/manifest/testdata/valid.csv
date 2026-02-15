@@ -1,0 +1,6 @@
+phase,workflow,agent,command,trigger_status,next_status
+3,create-story,SM,/create-story,backlog,ready-for-dev
+3,dev-story,Dev,/dev-story,ready-for-dev,review
+3,dev-story,Dev,/dev-story,in-progress,review
+3,code-review,QA,/code-review,review,done
+3,git-commit,,/git-commit,,done

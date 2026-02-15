@@ -55,11 +55,15 @@ type ProgressCallback func(stepIndex, totalSteps int, workflow string)
 // Executor uses dependency injection for testability: [WorkflowRunner] executes workflows,
 // [StatusReader] looks up current status, and [StatusWriter] persists status updates.
 // Use [NewExecutor] to create an instance and [Execute] to run the lifecycle.
+//
+// By default, the executor uses the hardcoded router for status-to-workflow mapping.
+// Call [SetRouter] to use a manifest-driven router instead.
 type Executor struct {
 	runner           WorkflowRunner
 	statusReader     StatusReader
 	statusWriter     StatusWriter
 	progressCallback ProgressCallback
+	router           *router.Router
 }
 
 // NewExecutor creates a new Executor with the required dependencies.
@@ -73,6 +77,23 @@ func NewExecutor(runner WorkflowRunner, reader StatusReader, writer StatusWriter
 		statusReader: reader,
 		statusWriter: writer,
 	}
+}
+
+// SetRouter configures a custom [router.Router] for status-to-workflow mapping.
+//
+// When set, the executor uses the provided router instead of the default hardcoded
+// routing. This enables manifest-driven routing via [router.NewRouterFromManifest].
+// If not set (or set to nil), the default package-level router functions are used.
+func (e *Executor) SetRouter(r *router.Router) {
+	e.router = r
+}
+
+// getLifecycle delegates to the configured router or falls back to the package-level function.
+func (e *Executor) getLifecycle(s status.Status) ([]router.LifecycleStep, error) {
+	if e.router != nil {
+		return e.router.GetLifecycle(s)
+	}
+	return router.GetLifecycle(s)
 }
 
 // SetProgressCallback configures an optional progress callback for workflow execution.
@@ -101,7 +122,7 @@ func (e *Executor) Execute(ctx context.Context, storyKey string) error {
 	}
 
 	// Get lifecycle steps from current status
-	steps, err := router.GetLifecycle(currentStatus)
+	steps, err := e.getLifecycle(currentStatus)
 	if err != nil {
 		return err // Returns router.ErrStoryComplete for done stories
 	}

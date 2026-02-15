@@ -27,9 +27,13 @@ type StatusReader interface {
 // story, it looks up the current status via [StatusReader], routes to the
 // appropriate workflow using the router package, and executes the workflow.
 //
+// By default, the queue uses the hardcoded router for status-to-workflow mapping.
+// Call [SetRouter] to use a manifest-driven router instead.
+//
 // Use [NewQueueRunner] to create a QueueRunner instance.
 type QueueRunner struct {
 	runner *Runner
+	router *router.Router
 }
 
 // NewQueueRunner creates a new queue runner wrapping the given [Runner].
@@ -37,6 +41,22 @@ type QueueRunner struct {
 // The provided runner is used to execute individual workflows for each story.
 func NewQueueRunner(runner *Runner) *QueueRunner {
 	return &QueueRunner{runner: runner}
+}
+
+// SetRouter configures a custom [router.Router] for status-to-workflow mapping.
+//
+// When set, the queue uses the provided router instead of the default hardcoded
+// routing. This enables manifest-driven routing via [router.NewRouterFromManifest].
+func (q *QueueRunner) SetRouter(r *router.Router) {
+	q.router = r
+}
+
+// getWorkflow delegates to the configured router or falls back to the package-level function.
+func (q *QueueRunner) getWorkflow(s status.Status) (string, error) {
+	if q.router != nil {
+		return q.router.GetWorkflow(s)
+	}
+	return router.GetWorkflow(s)
 }
 
 // RunQueueWithStatus executes the appropriate workflow for each story based on its status.
@@ -83,7 +103,7 @@ func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string
 		}
 
 		// Route to appropriate workflow
-		workflowName, err := router.GetWorkflow(storyStatus)
+		workflowName, err := q.getWorkflow(storyStatus)
 		if err != nil {
 			if errors.Is(err, router.ErrStoryComplete) {
 				// Done stories are skipped, not failures

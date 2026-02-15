@@ -28,8 +28,10 @@ import (
 
 	"bmaduum/internal/claude"
 	"bmaduum/internal/config"
+	"bmaduum/internal/manifest"
 	"bmaduum/internal/output"
 	"bmaduum/internal/output/core"
+	"bmaduum/internal/router"
 	"bmaduum/internal/status"
 	"bmaduum/internal/workflow"
 )
@@ -118,6 +120,10 @@ type App struct {
 
 	// StatusWriter updates story status in sprint-status.yaml.
 	StatusWriter StatusWriter
+
+	// Router is the workflow router for status-to-workflow mapping.
+	// If nil, callers fall back to default hardcoded routing.
+	Router *router.Router
 }
 
 // NewApp creates a new [App] with all production dependencies wired up.
@@ -145,6 +151,14 @@ func NewApp(cfg *config.Config) *App {
 	statusReader := status.NewReaderWithPath("", cfg.StatusPath)
 	statusWriter := status.NewWriterWithPath("", cfg.StatusPath)
 
+	// Try to load workflow manifest for dynamic routing
+	var wfRouter *router.Router
+	if m, err := manifest.ReadFromFile("_bmad/_cfg/workflow-manifest.csv"); err == nil {
+		wfRouter = router.NewRouterFromManifest(m)
+	} else {
+		wfRouter = router.NewRouter()
+	}
+
 	return &App{
 		Config:       cfg,
 		Executor:     executor,
@@ -152,6 +166,7 @@ func NewApp(cfg *config.Config) *App {
 		Runner:       runner,
 		StatusReader: statusReader,
 		StatusWriter: statusWriter,
+		Router:       wfRouter,
 	}
 }
 
