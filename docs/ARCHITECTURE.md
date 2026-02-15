@@ -1,29 +1,32 @@
 # Architecture Documentation
 
-Comprehensive architecture documentation for `bmaduum`.
-
 ## System Overview
 
-`bmaduum` is a Go CLI tool that orchestrates Claude AI to automate development workflows. It spawns Claude as a subprocess, parses streaming JSON output, and displays formatted results.
+`bmaduum` is a Go CLI tool that orchestrates Claude AI to automate BMAD-METHOD development workflows. It invokes BMAD v6 slash commands via Claude CLI as a subprocess, parses streaming JSON output, and displays formatted results.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              bmaduum                                  │
+│                              bmaduum                                        │
 │                                                                             │
 │  ┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌────────────┐  │
-│  │  CLI Layer  │───▶│  Lifecycle   │───▶│   Workflow  │───▶│   Claude   │  │
+│  │  CLI Layer  │───>│  Lifecycle   │───>│   Workflow  │───>│   Claude   │  │
 │  │   (Cobra)   │    │  (Executor)  │    │   (Runner)  │    │ (Executor) │  │
 │  └─────────────┘    └──────────────┘    └─────────────┘    └────────────┘  │
-│         │                  │                   │                  │        │
-│         ▼                  ▼                   ▼                  ▼        │
+│         │                  │                   │                  │         │
+│         v                  v                   v                  v         │
 │  ┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌────────────┐  │
-│  │   Config    │    │    State     │    │   Status    │    │   Output   │  │
-│  │   (Viper)   │    │  (Manager)   │    │   (Reader)  │    │  (Printer) │  │
+│  │   Config    │    │   Router     │    │   Status    │    │   Output   │  │
+│  │   (Viper)   │    │  (Manifest)  │    │  (Reader)   │    │  (Printer) │  │
 │  └─────────────┘    └──────────────┘    └─────────────┘    └────────────┘  │
-│                                                                             │
+│         │                  │                                               │
+│         v                  v                                               │
+│  ┌─────────────┐    ┌──────────────┐                                       │
+│  │  Manifest   │    │  BmadHelp   │                                       │
+│  │ (CSV/YAML)  │    │ (Fallback)  │                                       │
+│  └─────────────┘    └──────────────┘                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
-                                      ▼
+                                      v
                           ┌───────────────────────┐
                           │      Claude CLI       │
                           │  (External Process)   │
@@ -38,484 +41,117 @@ Comprehensive architecture documentation for `bmaduum`.
 
 - Single executable with subcommands
 - Subprocess orchestration (wraps Claude CLI)
+- Slash command invocation (delegates workflow logic to BMAD v6 engine)
 - Lifecycle-driven execution with state persistence for resume
 - Event-driven streaming output
 - Interface-based design for testability
-
-## Layer Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Entry Point Layer                           │
-│                   cmd/bmaduum/main.go                     │
-│                       main() → cli.Execute()                    │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        CLI Layer                                │
-│                      internal/cli/                              │
-│                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ App struct (Dependency Injection Container)               │  │
-│  │   - Config         *config.Config                         │  │
-│  │   - Executor       claude.Executor                        │  │
-│  │   - Printer        output.Printer                         │  │
-│  │   - Runner         *workflow.Runner                       │  │
-│  │   - Queue          *workflow.QueueRunner                  │  │
-│  │   - StatusReader   *status.Reader                         │  │
-│  │   - Lifecycle      *lifecycle.Executor                    │  │
-│  │   - StateManager   *state.Manager                         │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  Commands: story, epic, workflow (create-story, dev-story,      │
-│            code-review, git-commit), raw, version               │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Lifecycle Layer                              │
-│                   internal/lifecycle/                           │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Executor                                               │    │
-│  │    - Execute(ctx, storyKey) error                       │    │
-│  │    - GetSteps(storyKey) ([]LifecycleStep, error)        │    │
-│  │    - SetProgressCallback(ProgressCallback)              │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  Dependencies: WorkflowRunner, StatusReader, StatusWriter       │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     Workflow Layer                              │
-│                    internal/workflow/                           │
-│                                                                 │
-│  ┌─────────────────────┐     ┌─────────────────────────────┐    │
-│  │  Runner             │     │  QueueRunner                │    │
-│  │   - RunSingle()     │     │   - RunQueueWithStatus()    │    │
-│  │   - RunRaw()        │     └─────────────────────────────┘    │
-│  │   - RunFullCycle()  │                                        │
-│  └─────────────────────┘                                        │
-└─────────────────────────────────────────────────────────────────┘
-                                  │
-       ┌──────────────────────────┼──────────────────────────┐
-       ▼                          ▼                          ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│  Claude Layer     │  │  Output Layer     │  │  Config Layer     │
-│  internal/claude/ │  │  internal/output/ │  │  internal/config/ │
-│                   │  │                   │  │                   │
-│  - Executor       │  │  - Printer        │  │  - Loader         │
-│  - Parser         │  │  - Styles         │  │  - Config         │
-│  - Event          │  │                   │  │  - GetPrompt()    │
-└───────────────────┘  └───────────────────┘  └───────────────────┘
-         │
-         ▼
-┌───────────────────────────────────────────────────────────────┐
-│                    External: Claude CLI                       │
-│                                                               │
-│   claude --dangerously-skip-permissions                       │
-│          -p "<prompt>"                                        │
-│          --output-format stream-json                          │
-└───────────────────────────────────────────────────────────────┘
-
-                    Support Layers
-       ┌──────────────────────────┬──────────────────────────┐
-       ▼                          ▼                          ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│  State Layer      │  │  Status Layer     │  │  Router Layer     │
-│  internal/state/  │  │  internal/status/ │  │  internal/router/ │
-│                   │  │                   │  │                   │
-│  - Manager        │  │  - Reader         │  │  - GetWorkflow()  │
-│  - Save()         │  │  - GetStoryStatus │  │  - GetLifecycle() │
-│  - Load()         │  │                   │  │  - LifecycleStep  │
-│  - Clear()        │  │                   │  │                   │
-└───────────────────┘  └───────────────────┘  └───────────────────┘
-```
 
 ## Package Dependencies
 
 ```
 cmd/bmaduum/main.go
          │
-         ▼
+         v
     internal/cli (Cobra commands)
          │
-         ├──► internal/lifecycle (lifecycle orchestration)
+         ├──> internal/lifecycle (lifecycle orchestration)
          │         │
-         │         ├──► internal/router (GetLifecycle for step sequences)
+         │         ├──> internal/router (GetLifecycle for step sequences)
          │         │
-         │         └──► internal/workflow (WorkflowRunner for execution)
+         │         └──> internal/workflow (WorkflowRunner for execution)
          │
-         ├──► internal/state (execution state persistence)
-         │
-         ├──► internal/workflow (single workflow orchestration)
+         ├──> internal/bmadhelp (bmad-help fallback for unknown statuses)
          │         │
-         │         ├──► internal/claude (Claude execution + JSON parsing)
+         │         └──> internal/claude (Claude execution)
+         │
+         ├──> internal/manifest (workflow CSV + module YAML discovery)
+         │
+         ├──> internal/state (execution state persistence)
+         │
+         ├──> internal/workflow (single workflow orchestration)
          │         │
-         │         ├──► internal/output (terminal formatting)
+         │         ├──> internal/claude (Claude execution + JSON parsing)
          │         │
-         │         └──► internal/config (configuration)
+         │         ├──> internal/output (terminal formatting)
+         │         │
+         │         └──> internal/config (configuration + prompt expansion)
          │
-         ├──► internal/status (sprint status reading)
+         ├──> internal/status (sprint status reading with path discovery)
          │
-         ├──► internal/router (workflow routing)
+         ├──> internal/router (workflow routing: hardcoded or manifest-driven)
          │
-         └──► internal/config (Viper configuration)
+         └──> internal/config (Viper configuration)
 ```
 
-## Data Flow Diagram
+## Data Flow
 
-### Single Workflow Execution
+### Slash Command Invocation
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  User: bmaduum workflow create-story 6-1-setup                     │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  1. CLI Layer                                                            │
-│     - Cobra parses command and arguments                                 │
-│     - Routes to create-story command handler                             │
-│     - Handler calls: runner.RunSingle(ctx, "create-story", "6-1-setup")   │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  2. Config Layer                                                         │
-│     - config.GetPrompt("create-story", "6-1-setup")                       │
-│     - Template: "/bmad:...:create-story - Create story: {{.StoryKey}}"   │
-│     - Expanded: "/bmad:...:create-story - Create story: 6-1-setup"        │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  3. Claude Layer                                                         │
-│     - executor.ExecuteWithResult(ctx, prompt, handler)                   │
-│     - Spawns: claude --dangerously-skip-permissions -p "..." ...         │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  4. Parser Layer                                                         │
-│     - Reads JSON lines from stdout                                       │
-│     - Converts StreamEvent → Event                                       │
-│     - Emits events via channel                                           │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  5. Output Layer                                                         │
-│     - handler(event) called for each event                               │
-│     - printer.Text(msg) for text content                                 │
-│     - printer.ToolUse(...) for tool invocations                          │
-│     - printer.ToolResult(...) for tool results                           │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  6. Exit                                                                 │
-│     - Claude subprocess completes                                        │
-│     - Exit code propagated to CLI                                        │
-│     - CLI returns ExitError or nil                                       │
-└──────────────────────────────────────────────────────────────────────────┘
-```
-
-### Status-Based Routing (run command)
+When `use_slash_commands` is `true` (default), the flow is:
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  User: bmaduum story 6-1-setup                                       │
-└────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│  1. Status Reader                                                          │
-│     - Read: _bmad-output/implementation-artifacts/sprint-status.yaml       │
-│     - Get status for 6-1-setup: "ready-for-dev"                           │
-└────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│  2. Router                                                                 │
-│     - router.GetWorkflow("ready-for-dev") → "dev-story"                    │
-│                                                                            │
-│     Routing Table:                                                         │
-│       backlog       → create-story                                         │
-│       ready-for-dev → dev-story                                            │
-│       in-progress   → dev-story                                            │
-│       review        → code-review                                          │
-│       done          → ErrStoryComplete                                     │
-└────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│  3. Workflow Execution                                                     │
-│     - runner.RunSingle(ctx, "dev-story", "6-1-setup")                      │
-│     - (same flow as single workflow execution)                             │
-└────────────────────────────────────────────────────────────────────────────┘
+1. CLI receives: bmaduum story 6-1-setup
+2. config.GetPrompt("dev-story", "6-1-setup") → "/dev-story 6-1-setup"
+3. Claude CLI executes: claude --dangerously-skip-permissions -p "/dev-story 6-1-setup" ...
+4. BMAD v6 engine activates the correct agent and workflow steps
+5. Streaming JSON events → parsed → formatted terminal output
 ```
 
-### Story Batch Processing
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  User: bmaduum story 6-1-setup 6-2-auth 6-3-tests                      │
-└────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│  story command processes each story sequentially                           │
-│                                                                            │
-│  for each story:                                                           │
-│    ┌────────────────────────────────────────────────────────────────────┐  │
-│    │  1. Get lifecycle steps for current status                         │  │
-│    │  2. If "done" → skip story                                         │  │
-│    │  3. Execute each workflow in lifecycle                             │  │
-│    │  4. Update status after each workflow                              │  │
-│    │  5. If exit code != 0 → stop processing                            │  │
-│    └────────────────────────────────────────────────────────────────────┘  │
-│                                                                            │
-│  Print completion summary                                                  │
-└────────────────────────────────────────────────────────────────────────────┘
-```
+When `use_slash_commands` is `false`, legacy prompt templates are used instead. The template is sent as the prompt, and the BMAD v6 engine is bypassed.
 
 ### Lifecycle Execution Flow
 
-The lifecycle executor runs stories through their complete workflow sequence from current status to "done".
-
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  User: bmaduum story 6-1-setup                                       │
-│  (Full lifecycle execution)                                                │
+│  bmaduum story 6-1-setup                                                   │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
-                                    ▼
+                                    v
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  1. Get Current Status                                                     │
-│     - statusReader.GetStoryStatus("6-1-setup") → "backlog"                 │
+│  1. Status Reader                                                          │
+│     - Auto-discovers sprint-status.yaml (v6 path > legacy path)            │
+│     - Get status for 6-1-setup: "backlog"                                  │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
-                                    ▼
+                                    v
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  2. Get Lifecycle Steps                                                    │
+│  2. Router                                                                 │
+│     - If manifest exists: manifest-driven routing                          │
+│     - Otherwise: hardcoded routing table                                   │
 │     - router.GetLifecycle("backlog") → 4 steps                             │
 │                                                                            │
-│     Steps:                                                                 │
-│       1. create-story  → ready-for-dev                                     │
-│       2. dev-story     → review                                            │
-│       3. code-review   → done                                              │
-│       4. git-commit    → done                                              │
+│     Unknown status? → bmad-help fallback (if enabled)                      │
+│       Invokes /bmad-help via Claude CLI                                    │
+│       Parses response to determine next workflow                           │
+│       Depth-limited to 3 recursive calls                                   │
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
-                                    ▼
+                                    v
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  3. Execute Steps Loop                                                     │
 │                                                                            │
 │     for each step:                                                         │
-│       ┌────────────────────────────────────────────────────────────────┐   │
-│       │  a. Call progressCallback(stepIndex, totalSteps, workflow)     │   │
-│       │  b. runner.RunSingle(ctx, workflow, storyKey)                  │   │
-│       │  c. If exit code != 0 → return error (fail-fast)               │   │
-│       │  d. statusWriter.UpdateStatus(storyKey, nextStatus)            │   │
-│       └────────────────────────────────────────────────────────────────┘   │
+│       a. Call progressCallback(stepIndex, totalSteps, workflow)             │
+│       b. runner.RunSingle(ctx, workflow, storyKey)                         │
+│          → config.GetPrompt() expands slash command template               │
+│          → executor.ExecuteWithResult() spawns Claude CLI                  │
+│       c. If exit code != 0 → return error (fail-fast)                      │
+│       d. statusWriter.UpdateStatus(storyKey, nextStatus)                   │
 │                                                                            │
-│     Success: all steps completed                                           │
+│     Success: all steps completed, story is done                            │
 │     Failure: stops at first error                                          │
 └────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-           ┌─────────────────┐             ┌─────────────────┐
-           │     Success     │             │     Failure     │
-           │                 │             │                 │
-           │  Story is done  │             │  Save state     │
-           │  Clear state    │             │  Report error   │
-           └─────────────────┘             │  Exit with code │
-                                           └─────────────────┘
 ```
 
-### State Persistence
+### Module-Aware Lifecycle
 
-The state package enables resume functionality when lifecycle execution fails.
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                         State File: .bmad-state.json                       │
-│                                                                            │
-│  Location: Working directory (hidden file)                                 │
-│  Format: JSON                                                              │
-│                                                                            │
-│  {                                                                         │
-│    "story_key": "6-1-setup",                                               │
-│    "step_index": 2,           // 0-based, step that failed                 │
-│    "total_steps": 4,          // total steps in lifecycle                  │
-│    "start_status": "backlog"  // status when execution began               │
-│  }                                                                         │
-└────────────────────────────────────────────────────────────────────────────┘
-
-                         Save/Load Flow
-
-┌─────────────────┐                           ┌─────────────────┐
-│  On Failure     │                           │  On Resume      │
-│                 │                           │                 │
-│  1. Save state  │                           │  1. Load state  │
-│     to .json    │                           │     from .json  │
-│                 │                           │                 │
-│  2. Exit with   │                           │  2. Continue    │
-│     error code  │                           │     from step   │
-└─────────────────┘                           │                 │
-                                              │  3. On success, │
-                                              │     clear state │
-                                              └─────────────────┘
-
-                     Atomic Write Pattern
-
-┌────────────────────────────────────────────────────────────────────────────┐
-│  Manager.Save(state)                                                       │
-│                                                                            │
-│  1. Write to temporary file: .bmad-state.json.tmp                          │
-│  2. Rename temp to final: .bmad-state.json                                 │
-│                                                                            │
-│  This temp + rename pattern ensures crash safety:                          │
-│  - File is either fully written or not present                             │
-│  - Never left in a corrupted partial state                                 │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Component Diagrams
-
-### Claude Execution Flow
+When BMAD modules are installed:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        DefaultExecutor                                  │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ ExecuteWithResult(ctx, prompt, handler)
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  exec.CommandContext()                                                  │
-│                                                                         │
-│  cmd := exec.CommandContext(ctx, "claude",                              │
-│      "--dangerously-skip-permissions",                                  │
-│      "-p", prompt,                                                      │
-│      "--output-format", "stream-json")                                  │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-              ┌─────────────────────┴─────────────────────┐
-              │                                           │
-              ▼                                           ▼
-┌─────────────────────────┐               ┌─────────────────────────────┐
-│  stdout (JSON stream)   │               │  stderr (error output)      │
-│                         │               │                             │
-│  parser.Parse(stdout)   │               │  StderrHandler(line)        │
-│          │              │               │  (logs to os.Stderr)        │
-│          ▼              │               │                             │
-│  chan Event             │               └─────────────────────────────┘
-│          │              │
-│          ▼              │
-│  for event := range     │
-│    handler(event)       │
-└─────────────────────────┘
-                │
-                ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  cmd.Wait()                                                             │
-│  - Wait for Claude to complete                                          │
-│  - Extract exit code from ExitError                                     │
-│  - Return (exitCode, error)                                             │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Event Processing Pipeline
-
-```
-                      Claude CLI stdout
-                            │
-                            │ {"type":"system","subtype":"init",...}
-                            │ {"type":"assistant","message":{"content":[...]}}
-                            │ {"type":"user","tool_use_result":{...}}
-                            │ {"type":"result",...}
-                            ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        Parser.Parse()                                   │
-│                                                                         │
-│  bufio.Scanner reads JSON lines                                         │
-│  json.Unmarshal → StreamEvent                                           │
-│  NewEventFromStream → Event                                             │
-└─────────────────────────────────────────────────────────────────────────┘
-                            │
-                            │ Event{Type, Subtype, Text, ToolName, ...}
-                            ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      Event Handler                                      │
-│                                                                         │
-│  switch:                                                                │
-│    event.IsText()       → printer.Text(event.Text)                      │
-│    event.IsToolUse()    → printer.ToolUse(name, desc, cmd, path)        │
-│    event.IsToolResult() → printer.ToolResult(stdout, stderr, limit)     │
-└─────────────────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     Styled Terminal Output                              │
-│                                                                         │
-│  ┌─ Bash ──────────────────────────────────────────────────────────┐    │
-│  │  List files in directory                                        │    │
-│  │  $ ls -la                                                       │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-│                                                                         │
-│  file1.txt                                                              │
-│  file2.txt                                                              │
-│  ...                                                                    │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-## Sequence Diagrams
-
-### Complete Workflow Execution
-
-```
-User          CLI           Config        Runner        Executor       Parser        Printer
- │             │              │             │              │              │             │
- │─story 6-1-setup│            │             │              │              │             │
- │             │              │             │              │              │             │
- │             │──GetPrompt()─▶             │              │              │             │
- │             │              │             │              │              │             │
- │             │◀─prompt──────│             │              │              │             │
- │             │              │             │              │              │             │
- │             │──RunSingle()──────────────▶│              │              │             │
- │             │              │             │              │              │             │
- │             │              │             │──SessionStart()─────────────────────────▶│
- │             │              │             │              │              │             │
- │             │              │             │──ExecuteWithResult()─▶│              │
- │             │              │             │              │              │             │
- │             │              │             │              │──Parse()────▶│             │
- │             │              │             │              │              │             │
- │             │              │             │              │◀─Event───────│             │
- │             │              │             │              │              │             │
- │             │              │             │◀─handler(event)─│              │             │
- │             │              │             │              │              │             │
- │             │              │             │──Text()───────────────────────────────────▶│
- │             │              │             │              │              │             │
- │             │              │             │◀─Event───────│              │             │
- │             │              │             │              │              │             │
- │             │              │             │──ToolUse()───────────────────────────────▶│
- │             │              │             │              │              │             │
- │             │              │             │◀─Event───────│              │              │
- │             │              │             │              │              │             │
- │             │              │             │──ToolResult()────────────────────────────▶│
- │             │              │             │              │              │             │
- │             │              │             │◀─exitCode────│              │             │
- │             │              │             │              │              │             │
- │             │              │             │──SessionEnd()────────────────────────────▶│
- │             │              │             │              │              │             │
- │             │◀─exitCode────│             │              │              │             │
- │             │              │             │              │              │             │
- │◀─Exit(code)─│              │             │              │              │             │
+1. On startup, NewApp() reads _bmad/_config/manifest.yaml
+2. If SDET or TEA module found → router.InsertStepAfter("code-review", "test-automation", done)
+3. Lifecycle becomes: ... → code-review → test-automation → git-commit → done
+4. Module info shown in --dry-run output
 ```
 
 ## Key Interfaces
@@ -523,216 +159,73 @@ User          CLI           Config        Runner        Executor       Parser   
 ### Executor Interface
 
 ```go
-// Executor runs Claude CLI and returns streaming events.
 type Executor interface {
-    // Execute runs Claude with the given prompt and returns a channel of events.
     Execute(ctx context.Context, prompt string) (<-chan Event, error)
-
-    // ExecuteWithResult runs Claude and waits for completion.
-    ExecuteWithResult(ctx context.Context, prompt string, handler EventHandler) (int, error)
-}
-```
-
-### Printer Interface
-
-```go
-// Printer handles terminal output formatting.
-type Printer interface {
-    // Session lifecycle
-    SessionStart()
-    SessionEnd(duration time.Duration, success bool)
-
-    // Step progress
-    StepStart(step, total int, name string)
-    StepEnd(duration time.Duration, success bool)
-
-    // Tool usage
-    ToolUse(name, description, command, filePath string)
-    ToolResult(stdout, stderr string, truncateLines int)
-
-    // Content
-    Text(message string)
-    Divider()
-
-    // Queue output
-    QueueHeader(count int, stories []string)
-    QueueStoryStart(index, total int, storyKey string)
-    QueueSummary(results []StoryResult, allKeys []string, totalDuration time.Duration)
-}
-```
-
-### Parser Interface
-
-```go
-// Parser reads Claude's streaming JSON output.
-type Parser interface {
-    Parse(reader io.Reader) <-chan Event
+    ExecuteWithResult(ctx context.Context, prompt string, handler EventHandler, model string) (int, error)
 }
 ```
 
 ### Lifecycle Interfaces
 
 ```go
-// WorkflowRunner is the interface for executing individual workflows.
-// Implemented by workflow.Runner.
 type WorkflowRunner interface {
     RunSingle(ctx context.Context, workflowName, storyKey string) int
 }
 
-// StatusReader is the interface for looking up story status.
-// Implemented by status.Reader.
 type StatusReader interface {
     GetStoryStatus(storyKey string) (status.Status, error)
 }
 
-// StatusWriter is the interface for persisting story status updates.
-// Implemented by status.Reader (which handles both read and write).
 type StatusWriter interface {
     UpdateStatus(storyKey string, newStatus status.Status) error
 }
 
-// ProgressCallback is invoked before each workflow step begins.
-type ProgressCallback func(stepIndex, totalSteps int, workflow string)
+type BmadHelpFallback interface {
+    ResolveWorkflow(ctx context.Context, storyKey string, currentStatus status.Status) (workflow string, nextStatus status.Status, err error)
+}
 ```
 
-### Lifecycle Executor
+## App Dependency Container
 
 ```go
-// Executor orchestrates the complete story lifecycle.
-type Executor struct {
-    runner           WorkflowRunner
-    statusReader     StatusReader
-    statusWriter     StatusWriter
-    progressCallback ProgressCallback
+type App struct {
+    Config       *config.Config
+    Executor     claude.Executor
+    Printer      core.Printer
+    Runner       WorkflowRunner
+    StatusReader StatusReader
+    StatusWriter StatusWriter
+    Router       *router.Router        // Manifest-driven or hardcoded
+    Modules      *manifest.ModuleManifest  // nil if no module manifest
+    BmadHelp     lifecycle.BmadHelpFallback // nil disables fallback
 }
-
-// Execute runs the complete story lifecycle from current status to done.
-// Fail-fast: stops on first error.
-func (e *Executor) Execute(ctx context.Context, storyKey string) error
-
-// GetSteps returns the remaining lifecycle steps without executing.
-// Useful for dry-run preview.
-func (e *Executor) GetSteps(storyKey string) ([]LifecycleStep, error)
-
-// SetProgressCallback configures progress reporting.
-func (e *Executor) SetProgressCallback(cb ProgressCallback)
-```
-
-### State Manager
-
-```go
-// Manager handles state persistence operations.
-type Manager struct {
-    dir string  // Working directory for state file
-}
-
-// Save persists state atomically (temp file + rename).
-func (m *Manager) Save(state State) error
-
-// Load reads state from disk. Returns ErrNoState if not found.
-func (m *Manager) Load() (State, error)
-
-// Clear removes the state file. Idempotent.
-func (m *Manager) Clear() error
-
-// Exists returns true if a state file exists.
-func (m *Manager) Exists() bool
-```
-
-## Testing Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          Test Setup                                     │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │  MockExecutor                                                   │    │
-│  │    - Events []Event     (predetermined events to return)        │    │
-│  │    - ExitCode int       (exit code to return)                   │    │
-│  │    - RecordedPrompts    (capture prompts for assertions)        │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │  Test Printer (NewPrinterWithWriter)                            │    │
-│  │    - Writes to bytes.Buffer instead of os.Stdout                │    │
-│  │    - Allows output capture and verification                     │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │  Test Config                                                    │    │
-│  │    - DefaultConfig() provides sensible defaults                 │    │
-│  │    - Custom configs for specific test scenarios                 │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-## Error Handling
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Error Flow                                      │
-│                                                                        │
-│  Command Handler                                                       │
-│       │                                                                │
-│       │  Error occurs                                                  │
-│       ▼                                                                │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  Return ExitError{Code: N}                                      │   │
-│  │  - Wraps exit code for Cobra compatibility                      │   │
-│  │  - Implements error interface                                   │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│       │                                                                │
-│       ▼                                                                │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  RunWithConfig()                                                │   │
-│  │  - Calls IsExitError() to extract code                          │   │
-│  │  - Returns ExecuteResult{ExitCode, Err}                         │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│       │                                                                │
-│       ▼                                                                │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  Execute()                                                      │   │
-│  │  - Calls os.Exit(code) for non-zero codes                       │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Configuration Loading
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                     Configuration Priority                             │
-│                                                                        │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  1. Environment Variables (BMADUUM_*)                              │   │
-│  │     - BMADUUM_CONFIG_PATH → custom config file                     │   │
-│  │     - BMADUUM_CLAUDE_PATH → custom claude command/binary           │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                          │                                             │
-│                          ▼                                             │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  2. Config File                                                 │   │
-│  │     - $BMADUUM_CONFIG_PATH if set                                  │   │
-│  │     - OR ./config/workflows.yaml                                │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                          │                                             │
-│                          ▼                                             │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  3. Default Configuration                                       │   │
-│  │     - Built-in defaults via DefaultConfig()                     │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                        │
-│  Result: Merged Config struct                                          │
-└────────────────────────────────────────────────────────────────────────┘
+Priority (highest to lowest):
+  1. Environment variables (BMADUUM_*)
+  2. BMADUUM_CONFIG_PATH explicit file
+  3. ~/.config/bmaduum/workflows.yaml (platform-standard)
+  4. ./config/workflows.yaml (legacy)
+  5. ./workflows.yaml (legacy)
+  6. Built-in DefaultConfig()
+
+Sprint Status Path:
+  1. BMADUUM_SPRINT_STATUS_PATH env var
+  2. status_path config value
+  3. _bmad-output/implementation-artifacts/sprint-status.yaml (v6)
+  4. sprint-status.yaml (legacy)
 ```
 
 ## Design Principles
 
-1. **Dependency Injection** - All dependencies injected via App struct
-2. **Interface Segregation** - Small, focused interfaces (Executor, Printer, Parser)
-3. **Single Responsibility** - Each package has one clear purpose
-4. **State Persistence** - Resume capability via atomic state file writes
-5. **Event-Driven Processing** - Stream-based handling of Claude output
-6. **Testability First** - Interfaces and mocks for isolated testing
-7. **Graceful Degradation** - Queue continues processing, skips completed stories
-8. **Fail-Fast Execution** - Stop immediately on error, save state for resume
+1. **Slash Command Delegation** - Let BMAD v6 handle agent personas and workflow logic
+2. **Dependency Injection** - All dependencies injected via App struct
+3. **Interface Segregation** - Small, focused interfaces (Executor, Printer, WorkflowRunner)
+4. **Backward Compatibility** - Dual-mode prompts (slash commands + legacy templates)
+5. **Dynamic Discovery** - Manifest-driven routing and module-aware lifecycle
+6. **Graceful Fallback** - bmad-help for unknown statuses, auto-discovery for paths
+7. **Fail-Fast Execution** - Stop immediately on error, save state for resume
+8. **Testability First** - Interfaces and mocks for isolated testing

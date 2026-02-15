@@ -1,26 +1,23 @@
 # Package Documentation
 
-Complete API reference for all internal packages in `bmaduum`.
+API reference for all internal packages in `bmaduum`.
 
 ## Package Overview
 
-| Package                 | Location              | Purpose                                            |
-| ----------------------- | --------------------- | -------------------------------------------------- |
-| [cli](#cli)             | `internal/cli/`       | CLI commands, dependency injection, error handling |
-| [claude](#claude)       | `internal/claude/`    | Claude CLI execution and JSON parsing              |
-| [config](#config)       | `internal/config/`    | Configuration loading and template expansion       |
-| [output](#output)       | `internal/output/`    | Terminal formatting and styling                    |
-| output/core             | `internal/output/core/` | Core types (Printer interface, StepResult)       |
-| output/diff             | `internal/output/diff/` | Unified diff parsing and rendering               |
-| output/progress         | `internal/output/progress/` | Progress bar and status line                 |
-| output/render           | `internal/output/render/` | Specialized renderers (tool, session, box)     |
-| output/terminal         | `internal/output/terminal/` | ANSI terminal control                        |
-| [workflow](#workflow)   | `internal/workflow/`  | Workflow orchestration                             |
-| [lifecycle](#lifecycle) | `internal/lifecycle/` | Story lifecycle orchestration                      |
-| [state](#state)         | `internal/state/`     | Lifecycle state persistence for resume             |
-| [status](#status)       | `internal/status/`    | Sprint status file reading                         |
-| [router](#router)       | `internal/router/`    | Workflow routing based on status                   |
-| [ratelimit](#ratelimit) | `internal/ratelimit/` | Rate limit detection from Claude stderr            |
+| Package | Location | Purpose |
+|---------|----------|---------|
+| [cli](#cli) | `internal/cli/` | CLI commands, dependency injection, error handling |
+| [claude](#claude) | `internal/claude/` | Claude CLI execution and JSON parsing |
+| [config](#config) | `internal/config/` | Configuration loading and template expansion |
+| [output](#output) | `internal/output/` | Terminal formatting and styling |
+| [workflow](#workflow) | `internal/workflow/` | Single workflow execution |
+| [lifecycle](#lifecycle) | `internal/lifecycle/` | Story lifecycle orchestration |
+| [router](#router) | `internal/router/` | Status-to-workflow routing (hardcoded or manifest-driven) |
+| [manifest](#manifest) | `internal/manifest/` | Workflow manifest CSV and module YAML parsing |
+| [bmadhelp](#bmadhelp) | `internal/bmadhelp/` | bmad-help fallback for unknown statuses |
+| [status](#status) | `internal/status/` | Sprint status file reading with path discovery |
+| [state](#state) | `internal/state/` | Lifecycle state persistence for resume |
+| [ratelimit](#ratelimit) | `internal/ratelimit/` | Rate limit detection from Claude stderr |
 
 ---
 
@@ -30,143 +27,34 @@ Complete API reference for all internal packages in `bmaduum`.
 
 Command-line interface implementation using Cobra framework.
 
-### Types
-
-#### App
+### App
 
 Dependency injection container holding all application dependencies.
 
 ```go
 type App struct {
-    Config       *config.Config      // Configuration settings
-    Executor     claude.Executor     // Claude CLI executor
-    Printer      output.Printer      // Terminal output formatter
-    Runner       *workflow.Runner    // Workflow orchestrator
-    Queue        *workflow.QueueRunner  // Batch processor
-    StatusReader *status.Reader      // Sprint status reader
+    Config       *config.Config
+    Executor     claude.Executor
+    Printer      core.Printer
+    Runner       WorkflowRunner
+    StatusReader StatusReader
+    StatusWriter StatusWriter
+    Router       *router.Router             // Manifest-driven or hardcoded defaults
+    Modules      *manifest.ModuleManifest   // nil if no module manifest found
+    BmadHelp     lifecycle.BmadHelpFallback // nil disables fallback
 }
 ```
 
-#### ExecuteResult
-
-Result of CLI execution for testability.
+### Key Functions
 
 ```go
-type ExecuteResult struct {
-    ExitCode int    // Exit code (0 = success)
-    Err      error  // Error if any
-}
+func NewApp(cfg *config.Config) *App          // Wire up all production dependencies
+func NewRootCommand(app *App) *cobra.Command   // Create command tree
+func RunWithConfig(cfg *config.Config) ExecuteResult  // Testable entry point
+func Execute()                                 // main() entry point (calls os.Exit)
 ```
 
-#### ExitError
-
-Custom error type wrapping exit codes for Cobra compatibility.
-
-```go
-type ExitError struct {
-    Code int
-}
-
-func (e *ExitError) Error() string
-```
-
-### Functions
-
-#### NewApp
-
-Creates a new application with all dependencies wired up.
-
-```go
-func NewApp(cfg *config.Config) *App
-```
-
-**Parameters:**
-
-- `cfg` - Configuration loaded from file/environment
-
-**Returns:**
-
-- Fully wired `*App` with Executor, Printer, Runner, Queue, and StatusReader
-
-**Example:**
-
-```go
-cfg, _ := config.NewLoader().Load()
-app := cli.NewApp(cfg)
-```
-
-#### NewRootCommand
-
-Creates the root Cobra command with all subcommands registered.
-
-```go
-func NewRootCommand(app *App) *cobra.Command
-```
-
-**Parameters:**
-
-- `app` - Application with dependencies
-
-**Returns:**
-
-- Root Cobra command
-
-#### RunWithConfig
-
-Testable core that creates app and executes with given config.
-
-```go
-func RunWithConfig(cfg *config.Config) ExecuteResult
-```
-
-**Parameters:**
-
-- `cfg` - Configuration to use
-
-**Returns:**
-
-- `ExecuteResult` with exit code and error
-
-#### Run
-
-Loads config and runs CLI, returning result.
-
-```go
-func Run() ExecuteResult
-```
-
-**Returns:**
-
-- `ExecuteResult` with exit code and error
-
-#### Execute
-
-Entry point called by main(). Handles os.Exit().
-
-```go
-func Execute()
-```
-
-#### NewExitError
-
-Creates an exit error with the given code.
-
-```go
-func NewExitError(code int) *ExitError
-```
-
-#### IsExitError
-
-Type assertion helper for exit errors.
-
-```go
-func IsExitError(err error) (int, bool)
-```
-
-**Returns:**
-
-- Exit code and true if error is ExitError
-- 0 and false otherwise
+`NewApp` loads the workflow manifest, module manifest, and wires up the bmad-help fallback automatically.
 
 ---
 
@@ -174,249 +62,27 @@ func IsExitError(err error) (int, bool)
 
 **Package:** `internal/claude`
 
-Claude CLI interaction, subprocess execution, and JSON parsing.
+Claude CLI subprocess execution and JSON stream parsing.
 
-### Types
-
-#### EventType
-
-Type of event received from Claude.
-
-```go
-type EventType string
-
-const (
-    EventTypeSystem    EventType = "system"
-    EventTypeAssistant EventType = "assistant"
-    EventTypeUser      EventType = "user"
-    EventTypeResult    EventType = "result"
-)
-```
-
-#### StreamEvent
-
-Raw JSON event from Claude's streaming output.
-
-```go
-type StreamEvent struct {
-    Type          string          `json:"type"`
-    Subtype       string          `json:"subtype,omitempty"`
-    Message       *MessageContent `json:"message,omitempty"`
-    ToolUseResult *ToolResult     `json:"tool_use_result,omitempty"`
-}
-```
-
-#### MessageContent
-
-Content of a message from Claude.
-
-```go
-type MessageContent struct {
-    Content []ContentBlock `json:"content,omitempty"`
-}
-```
-
-#### ContentBlock
-
-Single block of content (text or tool use).
-
-```go
-type ContentBlock struct {
-    Type  string     `json:"type"`      // "text" or "tool_use"
-    Text  string     `json:"text,omitempty"`
-    Name  string     `json:"name,omitempty"`
-    Input *ToolInput `json:"input,omitempty"`
-}
-```
-
-#### ToolInput
-
-Input parameters for a tool invocation.
-
-```go
-type ToolInput struct {
-    Command     string `json:"command,omitempty"`
-    Description string `json:"description,omitempty"`
-    FilePath    string `json:"file_path,omitempty"`
-    Content     string `json:"content,omitempty"`
-}
-```
-
-#### ToolResult
-
-Result of a tool execution.
-
-```go
-type ToolResult struct {
-    Stdout      string `json:"stdout,omitempty"`
-    Stderr      string `json:"stderr,omitempty"`
-    Interrupted bool   `json:"interrupted,omitempty"`
-}
-```
-
-#### Event
-
-Parsed event with convenience methods.
-
-```go
-type Event struct {
-    Raw *StreamEvent
-
-    // Parsed fields
-    Type    EventType
-    Subtype string
-
-    // Text content
-    Text string
-
-    // Tool use
-    ToolName        string
-    ToolDescription string
-    ToolCommand     string
-    ToolFilePath    string
-
-    // Tool result
-    ToolStdout      string
-    ToolStderr      string
-    ToolInterrupted bool
-
-    // Session state
-    SessionStarted  bool
-    SessionComplete bool
-}
-```
-
-**Methods:**
-
-```go
-// IsText returns true if event contains text content
-func (e Event) IsText() bool
-
-// IsToolUse returns true if event is a tool invocation
-func (e Event) IsToolUse() bool
-
-// IsToolResult returns true if event contains tool result
-func (e Event) IsToolResult() bool
-```
-
-#### Executor
-
-Interface for running Claude CLI.
+### Executor Interface
 
 ```go
 type Executor interface {
-    // Execute runs Claude and returns event channel (fire-and-forget)
     Execute(ctx context.Context, prompt string) (<-chan Event, error)
-
-    // ExecuteWithResult runs Claude and waits for completion
-    ExecuteWithResult(ctx context.Context, prompt string, handler EventHandler) (int, error)
-}
-
-// EventHandler is called for each event
-type EventHandler func(event Event)
-```
-
-#### ExecutorConfig
-
-Configuration for the Claude executor.
-
-```go
-type ExecutorConfig struct {
-    BinaryPath    string              // Path to claude binary (default: "claude")
-    OutputFormat  string              // Output format (default: "stream-json")
-    Parser        Parser              // JSON parser (default: DefaultParser)
-    StderrHandler func(line string)   // Handler for stderr lines
+    ExecuteWithResult(ctx context.Context, prompt string, handler EventHandler, model string) (int, error)
 }
 ```
 
-#### DefaultExecutor
+`MockExecutor` provides a test implementation with `Events`, `ExitCode`, `Error`, and `RecordedPrompts` fields.
 
-Real implementation using os/exec.
+### Event
 
-```go
-type DefaultExecutor struct {
-    config ExecutorConfig
-    parser Parser
-}
-```
-
-#### MockExecutor
-
-Test implementation for unit tests.
+Parsed event from Claude's streaming JSON output with convenience methods:
 
 ```go
-type MockExecutor struct {
-    Events          []Event   // Events to return
-    Error           error     // Error to return
-    ExitCode        int       // Exit code to return
-    RecordedPrompts []string  // Captured prompts for assertions
-}
-```
-
-#### Parser
-
-Interface for parsing JSON output.
-
-```go
-type Parser interface {
-    Parse(reader io.Reader) <-chan Event
-}
-```
-
-#### DefaultParser
-
-Standard parser implementation.
-
-```go
-type DefaultParser struct {
-    BufferSize int  // Scanner buffer size (default: 10MB)
-}
-```
-
-### Functions
-
-#### NewEventFromStream
-
-Creates an Event from a raw StreamEvent.
-
-```go
-func NewEventFromStream(raw *StreamEvent) Event
-```
-
-#### NewExecutor
-
-Creates a new DefaultExecutor.
-
-```go
-func NewExecutor(config ExecutorConfig) *DefaultExecutor
-```
-
-**Example:**
-
-```go
-executor := claude.NewExecutor(claude.ExecutorConfig{
-    BinaryPath:   "claude",
-    OutputFormat: "stream-json",
-    StderrHandler: func(line string) {
-        fmt.Fprintln(os.Stderr, line)
-    },
-})
-```
-
-#### NewParser
-
-Creates a new DefaultParser.
-
-```go
-func NewParser() *DefaultParser
-```
-
-#### ParseSingle
-
-Parses a single JSON line into an Event.
-
-```go
-func ParseSingle(line string) (Event, error)
+func (e Event) IsText() bool
+func (e Event) IsToolUse() bool
+func (e Event) IsToolResult() bool
 ```
 
 ---
@@ -427,305 +93,43 @@ func ParseSingle(line string) (Event, error)
 
 Configuration loading via Viper with Go template expansion.
 
-### Types
-
-#### Config
-
-Root configuration structure.
+### Config
 
 ```go
 type Config struct {
-    Workflows map[string]WorkflowConfig
-    FullCycle FullCycleConfig
-    Claude    ClaudeConfig
-    Output    OutputConfig
+    UseSlashCommands bool                       // true = v6 slash commands, false = legacy templates
+    Workflows        map[string]WorkflowConfig  // Workflow definitions
+    StatusPath       string                     // Explicit sprint-status.yaml path (auto-discovered if empty)
+    Claude           ClaudeConfig               // Claude CLI settings
+    Output           OutputConfig               // Terminal output settings
 }
 ```
 
-#### WorkflowConfig
-
-Configuration for a single workflow.
+### WorkflowConfig
 
 ```go
 type WorkflowConfig struct {
-    PromptTemplate string  // Go template with {{.StoryKey}}
+    SlashCommand   string  // v6 template: "/dev-story {{.StoryKey}}"
+    PromptTemplate string  // Legacy template: "/bmad-bmm-dev-story - ..."
+    Model          string  // Optional model override (e.g., "opus", "sonnet")
 }
 ```
 
-#### FullCycleConfig
-
-Configuration for full cycle execution.
-
-```go
-type FullCycleConfig struct {
-    Steps []string  // e.g., ["create-story", "dev-story", ...]
-}
-```
-
-#### ClaudeConfig
-
-Claude CLI settings.
-
-```go
-type ClaudeConfig struct {
-    OutputFormat string  // "stream-json"
-    BinaryPath   string  // "claude"
-}
-```
-
-#### OutputConfig
-
-Output formatting settings.
-
-```go
-type OutputConfig struct {
-    TruncateLines  int  // Max lines for tool output (default: 20)
-    TruncateLength int  // Max chars for headers (default: 60)
-}
-```
-
-#### PromptData
-
-Data passed to prompt templates.
-
-```go
-type PromptData struct {
-    StoryKey string
-}
-```
-
-#### Loader
-
-Configuration loader using Viper.
-
-```go
-type Loader struct {
-    v *viper.Viper
-}
-```
-
-### Functions
-
-#### NewLoader
-
-Creates a new configuration loader.
-
-```go
-func NewLoader() *Loader
-```
-
-#### Load
-
-Loads configuration from defaults, file, and environment.
-
-```go
-func (l *Loader) Load() (*Config, error)
-```
-
-**Returns:**
-
-- Merged configuration
-- Error if loading fails
-
-#### LoadFromFile
-
-Loads configuration from a specific file.
-
-```go
-func (l *Loader) LoadFromFile(path string) (*Config, error)
-```
-
-#### GetPrompt
-
-Expands a workflow prompt template with data.
+### GetPrompt
 
 ```go
 func (c *Config) GetPrompt(workflowName, storyKey string) (string, error)
 ```
 
-**Parameters:**
+Returns the expanded prompt. Uses `SlashCommand` when `UseSlashCommands` is true, `PromptTemplate` when false. Falls back to the other template if the selected one is empty.
 
-- `workflowName` - Name of workflow (e.g., "create-story")
-- `storyKey` - Story key to substitute
-
-**Returns:**
-
-- Expanded prompt string
-- Error if workflow not found or template fails
-
-**Example:**
+### GetModel
 
 ```go
-prompt, err := cfg.GetPrompt("create-story", "PROJ-123")
-// "Create story: PROJ-123"
+func (c *Config) GetModel(workflowName string) string
 ```
 
-#### GetFullCycleSteps
-
-Returns the list of steps for full cycle execution.
-
-```go
-func (c *Config) GetFullCycleSteps() []string
-```
-
-#### DefaultConfig
-
-Returns built-in default configuration.
-
-```go
-func DefaultConfig() *Config
-```
-
-#### MustLoad
-
-Loads configuration or panics.
-
-```go
-func MustLoad() *Config
-```
-
----
-
-## output
-
-**Package:** `internal/output`
-
-Terminal output formatting using Lipgloss.
-
-### Subpackages
-
-The output package has been modularized into specialized subpackages:
-
-| Subpackage | Purpose |
-|------------|---------|
-| `core` | Core types: Printer interface, StepResult, StoryResult, ToolParams |
-| `diff` | Unified diff parsing and rich terminal rendering |
-| `progress` | Real-time progress line with spinner, activity timer, tokens |
-| `render` | Specialized renderers for tools, sessions, cycles, boxes |
-| `terminal` | Low-level ANSI terminal control, TTY detection, cursor management |
-
-### Types
-
-#### StepResult
-
-Result of a single workflow step.
-
-```go
-type StepResult struct {
-    Name     string
-    Duration time.Duration
-    Success  bool
-}
-```
-
-#### StoryResult
-
-Result of processing a story in queue.
-
-```go
-type StoryResult struct {
-    Key      string
-    Success  bool
-    Duration time.Duration
-    FailedAt string  // Step that failed (if any)
-    Skipped  bool    // True if story was skipped (done status)
-}
-```
-
-#### Printer
-
-Interface for terminal output.
-
-```go
-type Printer interface {
-    // Session lifecycle
-    SessionStart()
-    SessionEnd(duration time.Duration, success bool)
-
-    // Step progress
-    StepStart(step, total int, name string)
-    StepEnd(duration time.Duration, success bool)
-
-    // Tool usage
-    ToolUse(name, description, command, filePath string)
-    ToolResult(stdout, stderr string, truncateLines int)
-
-    // Content
-    Text(message string)
-    Divider()
-
-    // Full cycle
-    CycleHeader(storyKey string)
-    CycleSummary(storyKey string, steps []StepResult, totalDuration time.Duration)
-    CycleFailed(storyKey string, failedStep string, duration time.Duration)
-
-    // Queue
-    QueueHeader(count int, stories []string)
-    QueueStoryStart(index, total int, storyKey string)
-    QueueSummary(results []StoryResult, allKeys []string, totalDuration time.Duration)
-
-    // Command info
-    CommandHeader(label, prompt string, truncateLength int)
-    CommandFooter(duration time.Duration, success bool, exitCode int)
-}
-```
-
-#### DefaultPrinter
-
-Lipgloss-based printer implementation.
-
-```go
-type DefaultPrinter struct {
-    out io.Writer
-}
-```
-
-### Functions
-
-#### NewPrinter
-
-Creates a printer that writes to stdout.
-
-```go
-func NewPrinter() *DefaultPrinter
-```
-
-#### NewPrinterWithWriter
-
-Creates a printer that writes to a custom writer (for testing).
-
-```go
-func NewPrinterWithWriter(w io.Writer) *DefaultPrinter
-```
-
-**Example:**
-
-```go
-var buf bytes.Buffer
-printer := output.NewPrinterWithWriter(&buf)
-printer.Text("Hello")
-fmt.Println(buf.String())
-```
-
-### Styles (from styles.go)
-
-Visual elements used by the printer:
-
-**Colors:**
-
-- Primary (blue) - Headers, labels
-- Success (green) - Success indicators
-- Error (red) - Error indicators
-- Warning (orange) - Warnings
-- Muted (gray) - Secondary text
-- Highlight (purple) - Tool names
-
-**Icons:**
-
-- `CheckIcon` (✓) - Success
-- `CrossIcon` (✗) - Failure
-- `PendingIcon` (○) - Pending/skipped
-- `ProgressIcon` (●) - In progress
+Returns the model override for a workflow, or empty string for default.
 
 ---
 
@@ -733,132 +137,20 @@ Visual elements used by the printer:
 
 **Package:** `internal/workflow`
 
-Workflow orchestration and batch processing.
+Single workflow execution using Claude CLI.
 
-### Types
-
-#### Step
-
-Represents a workflow step.
+### Runner
 
 ```go
-type Step struct {
-    Name   string
-    Prompt string
-}
-```
+type Runner struct { /* ... */ }
 
-#### StepResult
-
-Result of executing a step.
-
-```go
-type StepResult struct {
-    Name     string
-    Duration time.Duration
-    ExitCode int
-    Success  bool
-}
-```
-
-#### Runner
-
-Executes workflows using Claude.
-
-```go
-type Runner struct {
-    executor claude.Executor
-    printer  output.Printer
-    config   *config.Config
-}
-```
-
-#### QueueRunner
-
-Batch processor for multiple stories.
-
-```go
-type QueueRunner struct {
-    runner *Runner
-}
-```
-
-### Functions
-
-#### NewRunner
-
-Creates a new workflow runner.
-
-```go
-func NewRunner(executor claude.Executor, printer output.Printer, cfg *config.Config) *Runner
-```
-
-#### RunSingle
-
-Executes a single workflow step.
-
-```go
+func NewRunner(executor claude.Executor, printer core.Printer, cfg *config.Config) *Runner
 func (r *Runner) RunSingle(ctx context.Context, workflowName, storyKey string) int
-```
-
-**Parameters:**
-
-- `ctx` - Context for cancellation
-- `workflowName` - Workflow to run (e.g., "create-story")
-- `storyKey` - Story key for template expansion
-
-**Returns:**
-
-- Exit code (0 = success)
-
-#### RunRaw
-
-Executes an arbitrary prompt.
-
-```go
 func (r *Runner) RunRaw(ctx context.Context, prompt string) int
+func (r *Runner) SetOperation(operation string)  // Set progress bar context
 ```
 
-#### RunFullCycle
-
-Executes all steps in full cycle sequence.
-
-```go
-func (r *Runner) RunFullCycle(ctx context.Context, storyKey string) int
-```
-
-#### NewQueueRunner
-
-Creates a new queue runner.
-
-```go
-func NewQueueRunner(runner *Runner) *QueueRunner
-```
-
-#### RunQueueWithStatus
-
-Processes multiple stories using status-based routing.
-
-```go
-func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string, statusReader *status.Reader) int
-```
-
-**Parameters:**
-
-- `ctx` - Context for cancellation
-- `storyKeys` - List of story keys to process
-- `statusReader` - Reader for sprint status file
-
-**Returns:**
-
-- Exit code (0 = all successful)
-
-**Behavior:**
-
-- Reads status for each story
-- Routes to appropriate workflow
-- Skips "done" stories
-- Stops on first failure
+`RunSingle` calls `config.GetPrompt()` to expand the slash command template, then executes Claude CLI with streaming output.
 
 ---
 
@@ -868,455 +160,28 @@ func (q *QueueRunner) RunQueueWithStatus(ctx context.Context, storyKeys []string
 
 Story lifecycle orchestration from current status to done.
 
-The lifecycle package provides an Executor that runs stories through their complete workflow sequence (create->dev->review->commit) based on current status. Each step updates the story status automatically after successful completion.
-
-### Types
-
-#### Executor
-
-Orchestrates the complete story lifecycle from current status to done.
+### Executor
 
 ```go
-type Executor struct {
-    runner           WorkflowRunner
-    statusReader     StatusReader
-    statusWriter     StatusWriter
-    progressCallback ProgressCallback
-}
-```
+type Executor struct { /* ... */ }
 
-Executor uses dependency injection for testability: WorkflowRunner executes workflows, StatusReader looks up current status, and StatusWriter persists status updates.
-
-#### WorkflowRunner
-
-Interface for executing individual workflows.
-
-```go
-type WorkflowRunner interface {
-    RunSingle(ctx context.Context, workflowName, storyKey string) int
-}
-```
-
-RunSingle executes a named workflow for a story and returns the exit code. An exit code of 0 indicates success; any non-zero value indicates failure. The `workflow.Runner` type implements this interface.
-
-#### StatusReader
-
-Interface for looking up story status.
-
-```go
-type StatusReader interface {
-    GetStoryStatus(storyKey string) (status.Status, error)
-}
-```
-
-GetStoryStatus retrieves the current status for a story key. Returns an error if the story cannot be found or the status file is invalid.
-
-#### StatusWriter
-
-Interface for persisting story status updates.
-
-```go
-type StatusWriter interface {
-    UpdateStatus(storyKey string, newStatus status.Status) error
-}
-```
-
-UpdateStatus sets a new status for a story after successful workflow completion. Returns an error if the status file cannot be written.
-
-#### ProgressCallback
-
-Callback invoked before each workflow step begins execution.
-
-```go
-type ProgressCallback func(stepIndex, totalSteps int, workflow string)
-```
-
-**Parameters:**
-
-- `stepIndex` - 1-based index of the current step
-- `totalSteps` - Total number of steps in the lifecycle
-- `workflow` - Name of the workflow about to execute
-
-The callback is optional and can be set via SetProgressCallback.
-
-### Functions
-
-#### NewExecutor
-
-Creates a new Executor with the required dependencies.
-
-```go
 func NewExecutor(runner WorkflowRunner, reader StatusReader, writer StatusWriter) *Executor
-```
-
-**Parameters:**
-
-- `runner` - Executes workflows
-- `reader` - Looks up story status
-- `writer` - Persists status updates
-
-**Returns:**
-
-- Configured `*Executor` ready for use
-
-#### SetProgressCallback
-
-Configures an optional progress callback for workflow execution.
-
-```go
-func (e *Executor) SetProgressCallback(cb ProgressCallback)
-```
-
-**Parameters:**
-
-- `cb` - Callback to invoke before each workflow step
-
-#### Execute
-
-Runs the complete story lifecycle from current status to done.
-
-```go
+func (e *Executor) SetRouter(r *router.Router)
+func (e *Executor) SetBmadHelp(fb BmadHelpFallback)
 func (e *Executor) Execute(ctx context.Context, storyKey string) error
-```
-
-**Parameters:**
-
-- `ctx` - Context for cancellation
-- `storyKey` - Story identifier to process
-
-**Returns:**
-
-- `nil` on success
-- Error if status lookup, workflow execution, or status update fails
-- `router.ErrStoryComplete` for stories already done
-
-**Behavior:**
-
-- Looks up story's current status
-- Determines remaining workflow steps via `router.GetLifecycle`
-- Runs each workflow in sequence
-- Updates status after each successful workflow
-- Stops on first error (fail-fast)
-
-#### GetSteps
-
-Returns the remaining lifecycle steps for a story without executing them.
-
-```go
 func (e *Executor) GetSteps(storyKey string) ([]router.LifecycleStep, error)
 ```
 
-**Parameters:**
+`Execute` looks up the story status, determines remaining steps via the router, and runs each workflow in sequence. After each success, it updates the story status.
 
-- `storyKey` - Story identifier to check
+When the router returns `ErrUnknownStatus` and bmad-help is configured, the executor invokes `/bmad-help` to get a single workflow recommendation, executes it, then re-reads the status and continues. This is depth-limited to 3 recursive calls.
 
-**Returns:**
-
-- Slice of `router.LifecycleStep` showing planned execution path
-- Error if status lookup fails
-- `router.ErrStoryComplete` for stories already done
-
-**Example:**
+### BmadHelpFallback
 
 ```go
-executor := lifecycle.NewExecutor(runner, statusReader, statusWriter)
-executor.SetProgressCallback(func(step, total int, workflow string) {
-    fmt.Printf("Step %d/%d: %s\n", step, total, workflow)
-})
-
-err := executor.Execute(ctx, "PROJ-123")
-if errors.Is(err, router.ErrStoryComplete) {
-    fmt.Println("Story already complete")
+type BmadHelpFallback interface {
+    ResolveWorkflow(ctx context.Context, storyKey string, currentStatus status.Status) (workflow string, nextStatus status.Status, err error)
 }
-```
-
----
-
-## state
-
-**Package:** `internal/state`
-
-Lifecycle state persistence for resume functionality.
-
-When a lifecycle execution fails (e.g., due to a Claude CLI error), the state is saved to disk so that execution can be resumed from the point of failure rather than starting over from the beginning. This is particularly valuable for long-running story lifecycles.
-
-### Constants
-
-```go
-const StateFileName = ".bmad-state.json"
-```
-
-StateFileName is the name of the state file in the working directory. It is a hidden file (prefixed with ".") to avoid cluttering the directory. The file contains JSON-encoded State data.
-
-```go
-var ErrNoState = errors.New("no state file exists")
-```
-
-ErrNoState is a sentinel error returned by Manager.Load when no state file exists. Callers should treat this as a signal to start a fresh execution rather than as an error condition.
-
-### Types
-
-#### State
-
-Represents the persisted lifecycle execution state.
-
-```go
-type State struct {
-    StoryKey    string `json:"story_key"`     // Story being processed
-    StepIndex   int    `json:"step_index"`    // 0-based index of next step
-    TotalSteps  int    `json:"total_steps"`   // Total lifecycle steps
-    StartStatus string `json:"start_status"`  // Status when execution began
-}
-```
-
-**Fields:**
-
-- `StoryKey` - Identifier of the story being processed
-- `StepIndex` - 0-based index of the step that failed or is next to execute
-- `TotalSteps` - Total number of steps in the lifecycle sequence (for progress display)
-- `StartStatus` - Story's status when execution began (for debugging context)
-
-#### Manager
-
-Handles state persistence operations.
-
-```go
-type Manager struct {
-    dir string  // Working directory for state file
-}
-```
-
-The Manager uses a directory-based approach where the state file is stored in a configurable directory. This enables testability by allowing tests to use temporary directories.
-
-### Functions
-
-#### NewManager
-
-Creates a new state manager for the given directory.
-
-```go
-func NewManager(dir string) *Manager
-```
-
-**Parameters:**
-
-- `dir` - Working directory where state file will be stored (use "." for current directory)
-
-**Returns:**
-
-- Configured `*Manager` ready for use
-
-#### Save
-
-Persists the state to disk atomically.
-
-```go
-func (m *Manager) Save(state State) error
-```
-
-**Parameters:**
-
-- `state` - State to persist
-
-**Returns:**
-
-- `nil` on success
-- Error if marshaling or writing fails
-
-**Behavior:**
-
-The state is first written to a temporary file, then renamed to the final location. This temp file + rename pattern ensures crash safety: the state file is either fully written or not present, never corrupted.
-
-#### Load
-
-Reads the state from disk.
-
-```go
-func (m *Manager) Load() (State, error)
-```
-
-**Returns:**
-
-- Loaded `State` and `nil` on success
-- Empty `State` and `ErrNoState` if no state file exists
-- Empty `State` and error for read or parse failures
-
-#### Clear
-
-Removes the state file if it exists.
-
-```go
-func (m *Manager) Clear() error
-```
-
-**Returns:**
-
-- `nil` on success (including when file doesn't exist)
-- Error if removal fails
-
-This should be called after successful lifecycle completion to clean up. The method is idempotent.
-
-#### Exists
-
-Returns true if a state file exists.
-
-```go
-func (m *Manager) Exists() bool
-```
-
-Quick check to determine if there is saved state to resume from, without loading and parsing the full state data.
-
-#### statePath
-
-Returns the full path to the state file.
-
-```go
-func (m *Manager) statePath() string
-```
-
-Internal helper that joins the directory with StateFileName.
-
-**Example:**
-
-```go
-manager := state.NewManager(".")
-
-// Save state when lifecycle fails
-st := state.State{
-    StoryKey:    "PROJ-123",
-    StepIndex:   2,
-    TotalSteps:  4,
-    StartStatus: "backlog",
-}
-if err := manager.Save(st); err != nil {
-    log.Fatal(err)
-}
-
-// Load state to resume
-loaded, err := manager.Load()
-if errors.Is(err, state.ErrNoState) {
-    fmt.Println("No state to resume, starting fresh")
-} else if err != nil {
-    log.Fatal(err)
-} else {
-    fmt.Printf("Resuming %s from step %d\n", loaded.StoryKey, loaded.StepIndex)
-}
-
-// Clear state after successful completion
-manager.Clear()
-```
-
----
-
-## status
-
-**Package:** `internal/status`
-
-Sprint status file reading.
-
-### Types
-
-#### Status
-
-Story development status.
-
-```go
-type Status string
-
-const (
-    StatusBacklog     Status = "backlog"
-    StatusReadyForDev Status = "ready-for-dev"
-    StatusInProgress  Status = "in-progress"
-    StatusReview      Status = "review"
-    StatusDone        Status = "done"
-)
-```
-
-**Methods:**
-
-```go
-// IsValid returns true if status is a valid value
-func (s Status) IsValid() bool
-```
-
-#### SprintStatus
-
-Structure from sprint-status.yaml.
-
-```go
-type SprintStatus struct {
-    DevelopmentStatus map[string]Status `yaml:"development_status"`
-}
-```
-
-#### Reader
-
-Reader for sprint status file.
-
-```go
-type Reader struct {
-    basePath string
-}
-```
-
-### Constants
-
-```go
-const DefaultStatusPath = "_bmad-output/implementation-artifacts/sprint-status.yaml"
-```
-
-### Functions
-
-#### NewReader
-
-Creates a reader with optional base path.
-
-```go
-func NewReader(basePath string) *Reader
-```
-
-**Parameters:**
-
-- `basePath` - Base directory (empty string uses current directory)
-
-#### Read
-
-Reads the full sprint status file.
-
-```go
-func (r *Reader) Read() (*SprintStatus, error)
-```
-
-#### GetStoryStatus
-
-Gets status for a specific story.
-
-```go
-func (r *Reader) GetStoryStatus(storyKey string) (Status, error)
-```
-
-#### GetEpicStories
-
-Gets all stories in an epic, sorted by story number.
-
-```go
-func (r *Reader) GetEpicStories(epicID string) ([]string, error)
-```
-
-**Parameters:**
-
-- `epicID` - Epic identifier (e.g., "05")
-
-**Returns:**
-
-- Sorted list of story keys matching pattern `{epicID}-{storyNum}-*`
-
-**Example:**
-
-```go
-reader := status.NewReader("")
-stories, err := reader.GetEpicStories("05")
-// ["05-01-auth", "05-02-dashboard", "05-03-tests"]
 ```
 
 ---
@@ -1325,46 +190,149 @@ stories, err := reader.GetEpicStories("05")
 
 **Package:** `internal/router`
 
-Workflow routing based on story status.
+Status-to-workflow routing with support for hardcoded defaults and manifest-driven routing.
 
-### Variables
-
-Sentinel errors for routing decisions.
+### Router
 
 ```go
-var (
-    ErrStoryComplete = errors.New("story is complete, no workflow needed")
-    ErrUnknownStatus = errors.New("unknown status value")
-)
+type Router struct { /* ... */ }
+
+func NewRouter() *Router                                   // Hardcoded defaults
+func NewRouterFromManifest(m *manifest.Manifest) *Router   // Manifest-driven
+func (r *Router) GetWorkflow(s status.Status) (string, error)
+func (r *Router) GetLifecycle(s status.Status) ([]LifecycleStep, error)
+func (r *Router) InsertStepAfter(after, workflow string, nextStatus status.Status)
 ```
 
-### Functions
-
-#### GetWorkflow
-
-Returns the workflow name for a given status.
+### LifecycleStep
 
 ```go
-func GetWorkflow(s status.Status) (string, error)
+type LifecycleStep struct {
+    Workflow   string
+    NextStatus status.Status
+    Model      string
+}
 ```
 
-**Routing Table:**
-
-| Status          | Workflow         | Error              |
-| --------------- | ---------------- | ------------------ |
-| `backlog`       | `"create-story"` | nil                |
-| `ready-for-dev` | `"dev-story"`    | nil                |
-| `in-progress`   | `"dev-story"`    | nil                |
-| `review`        | `"code-review"`  | nil                |
-| `done`          | `""`             | `ErrStoryComplete` |
-| other           | `""`             | `ErrUnknownStatus` |
-
-**Example:**
+### Sentinel Errors
 
 ```go
-workflow, err := router.GetWorkflow(status.StatusReadyForDev)
-// workflow = "dev-story", err = nil
-
-workflow, err := router.GetWorkflow(status.StatusDone)
-// workflow = "", err = ErrStoryComplete
+var ErrStoryComplete = errors.New("story is complete, no workflow needed")
+var ErrUnknownStatus = errors.New("unknown status value")
 ```
+
+Package-level `GetWorkflow()` and `GetLifecycle()` functions are available as backward-compatible wrappers using a default hardcoded router.
+
+---
+
+## manifest
+
+**Package:** `internal/manifest`
+
+BMAD v6 file discovery for workflow manifests and module manifests.
+
+### Workflow Manifest
+
+Reads `_bmad/_cfg/workflow-manifest.csv` to discover available workflows.
+
+```go
+type Manifest struct { /* ... */ }
+
+func ReadFromFile(path string) (*Manifest, error)
+func (m *Manifest) HasWorkflow(name string) bool
+func (m *Manifest) GetEntriesForStatus(status string) []WorkflowEntry
+```
+
+### Module Manifest
+
+Reads `_bmad/_config/manifest.yaml` to discover installed modules.
+
+```go
+type ModuleManifest struct { /* ... */ }
+
+func ReadModulesFromFile(path string) (*ModuleManifest, error)
+func (m *ModuleManifest) HasModule(name string) bool
+func (m *ModuleManifest) Names() []string
+```
+
+---
+
+## bmadhelp
+
+**Package:** `internal/bmadhelp`
+
+Last-resort fallback for unknown statuses via `/bmad-help` invocation.
+
+```go
+type ClaudeFallback struct { /* ... */ }
+
+func NewClaudeFallback(executor claude.Executor) *ClaudeFallback
+func (c *ClaudeFallback) ResolveWorkflow(ctx context.Context, storyKey string, currentStatus status.Status) (string, status.Status, error)
+```
+
+Invokes `/bmad-help` via Claude CLI, parses the response for known workflow names (create-story, dev-story, code-review, test-automation, git-commit), and returns the recommended workflow and expected next status.
+
+`ParseResponse(response string) (*Recommendation, error)` extracts workflow names from free-form text (case-insensitive, first match wins).
+
+`MockFallback` is available for testing.
+
+---
+
+## status
+
+**Package:** `internal/status`
+
+Sprint status file reading with v6/legacy path discovery.
+
+### Path Discovery
+
+```go
+func ResolvePath(configuredPath string) string
+```
+
+Returns the sprint-status.yaml path using priority: `BMADUUM_SPRINT_STATUS_PATH` env var > `configuredPath` > v6 path > legacy path.
+
+### Reader / Writer
+
+```go
+func NewReader(basePath string) *Reader               // Auto-discovers path
+func NewReaderWithPath(basePath, configuredPath string) *Reader  // Uses configured path
+func NewWriter(basePath string) *Writer
+func NewWriterWithPath(basePath, configuredPath string) *Writer
+
+func (r *Reader) GetStoryStatus(storyKey string) (Status, error)
+func (r *Reader) GetEpicStories(epicID string) ([]string, error)
+func (r *Reader) GetAllEpics() ([]string, error)
+func (w *Writer) UpdateStatus(storyKey string, newStatus Status) error  // Atomic write
+```
+
+---
+
+## state
+
+**Package:** `internal/state`
+
+Lifecycle state persistence for resume functionality. State is saved to `.bmad-state.json` using atomic writes (temp file + rename).
+
+```go
+func NewManager(dir string) *Manager
+func (m *Manager) Save(state State) error    // Atomic write
+func (m *Manager) Load() (State, error)      // Returns ErrNoState if absent
+func (m *Manager) Clear() error              // Idempotent
+```
+
+---
+
+## ratelimit
+
+**Package:** `internal/ratelimit`
+
+Rate limit detection from Claude CLI stderr output.
+
+```go
+func NewDetector() *Detector
+func (d *Detector) CheckLine(line string) Info    // Detect rate limit messages
+func (d *Detector) WaitTime(info Info) time.Duration  // Calculate wait time
+```
+
+Used with `--auto-retry` flag for automatic retry with intelligent wait times.

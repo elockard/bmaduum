@@ -10,7 +10,7 @@ bmaduum [command] [arguments] [flags]
 
 ## Description
 
-BMAD Automation CLI orchestrates Claude AI to run development workflows including story creation, implementation, code review, and git operations.
+BMAD Automation CLI orchestrates Claude AI to run development workflows. By default, it invokes BMAD v6 slash commands (`/create-story`, `/dev-story`, etc.), letting the BMAD workflow engine handle agent personas and step-by-step execution.
 
 ## Global Behavior
 
@@ -32,7 +32,7 @@ Run full lifecycle for one or more stories from their current status to done.
 **Usage:**
 
 ```bash
-bmaduum story [--dry-run] [--auto-retry] <story-key> [story-key...]
+bmaduum story [--dry-run] [--auto-retry] [--no-bmad-help] <story-key> [story-key...]
 ```
 
 **Arguments:**
@@ -45,17 +45,13 @@ bmaduum story [--dry-run] [--auto-retry] <story-key> [story-key...]
 |------|-------------|
 | `--dry-run` | Preview workflow sequence without execution |
 | `--auto-retry` | Automatically retry on rate limit errors |
+| `--no-bmad-help` | Disable bmad-help fallback for unknown statuses |
 
 **Examples:**
 
 ```bash
-# Run full lifecycle for a single story
 bmaduum story 6-1-setup-project
-
-# Run full lifecycle for multiple stories
 bmaduum story 6-1-setup 6-2-auth 6-3-tests
-
-# Preview what would run
 bmaduum story --dry-run 6-1-setup 6-2-auth
 ```
 
@@ -65,7 +61,7 @@ bmaduum story --dry-run 6-1-setup 6-2-auth
 2. Auto-updates status after each successful workflow step
 3. Skips stories with status `done`
 4. Stops on first failure
-5. For multiple stories, shows progress indicators
+5. For unrecognized statuses, invokes `/bmad-help` fallback (unless `--no-bmad-help`)
 
 **Lifecycle Routing:**
 
@@ -77,6 +73,10 @@ bmaduum story --dry-run 6-1-setup 6-2-auth
 | `review`        | code-review -> git-commit -> done                              |
 | `done`          | No action (story already complete)                             |
 
+If a workflow manifest is found at `_bmad/_cfg/workflow-manifest.csv`, routing is driven by the manifest instead of the hardcoded table above.
+
+If SDET or TEA modules are installed (via `_bmad/_config/manifest.yaml`), `test-automation` is automatically inserted after `code-review`.
+
 ---
 
 ### epic
@@ -86,11 +86,7 @@ Run full lifecycle for all stories in one or more epics, or all active epics.
 **Usage:**
 
 ```bash
-# Single or multiple epics
-bmaduum epic [--dry-run] [--auto-retry] <epic-id> [epic-id...]
-
-# All active epics
-bmaduum epic [--dry-run] [--auto-retry] all
+bmaduum epic [--dry-run] [--auto-retry] [--no-bmad-help] <epic-id>|all [epic-id...]
 ```
 
 **Arguments:**
@@ -103,64 +99,34 @@ bmaduum epic [--dry-run] [--auto-retry] all
 |------|-------------|
 | `--dry-run` | Preview workflow sequence without execution |
 | `--auto-retry` | Automatically retry on rate limit errors |
+| `--no-bmad-help` | Disable bmad-help fallback for unknown statuses |
 
 **Examples:**
 
 ```bash
-# Run full lifecycle for all stories in a single epic
 bmaduum epic 6
-
-# Run multiple epics
 bmaduum epic 2 4 6
-
-# Run all active epics
 bmaduum epic all
-
-# Preview what would run
-bmaduum epic --dry-run 2 4 6
 bmaduum epic --dry-run all
 ```
 
 **Story Discovery:**
 
-Stories are discovered from `sprint-status.yaml` using the pattern:
-
-```
-{epic-id}-{story-number}-*
-```
-
-For epic `6`, this matches:
-
-- `6-1-implement-auth`
-- `6-2-add-dashboard`
-- `6-3-fix-navigation`
-
-Stories are sorted by story number and processed in order.
-
-**When using `all`:**
-
-The `all` argument auto-discovers all epics with non-completed stories and processes them in numerical order.
+Stories are discovered from `sprint-status.yaml` using the pattern `{epic-id}-{story-number}-*`. For epic `6`, this matches `6-1-implement-auth`, `6-2-add-dashboard`, etc. Stories are sorted by story number.
 
 ---
 
 ### workflow (Advanced)
 
-Run individual BMAD workflow steps directly. These are the same workflow commands used in BMAD-METHOD and are automatically executed by `story` and `epic` commands.
+Run individual BMAD workflow steps directly.
 
 **Usage:**
 
 ```bash
 bmaduum workflow <workflow-name> <story-key>
-bmaduum workflow <subcommand> --help
 ```
 
 **Available workflows:**
-- `create-story`: Create a story definition from backlog
-- `dev-story`: Implement a story (ready-for-dev or in-progress)
-- `code-review`: Review code changes (review status)
-- `git-commit`: Commit and push changes after review
-
-**Subcommands:**
 | Subcommand | Description |
 |------------|-------------|
 | `create-story` | Create a story definition from backlog |
@@ -176,20 +142,11 @@ bmaduum workflow <subcommand> --help
 **Examples:**
 
 ```bash
-# Using parent command syntax
 bmaduum workflow create-story 6-1-setup
 bmaduum workflow dev-story 6-1-setup
-bmaduum workflow code-review 6-1-setup
-bmaduum workflow git-commit 6-1-setup
 ```
 
-**When to use:**
-
-- A workflow fails and you want to retry just that step
-- You need to run a step out of the normal sequence for debugging
-- You're testing or developing workflow prompts
-
-**Note:** Most users should use `story` or `epic` commands instead.
+**When to use:** Retrying a failed step, running a step out of sequence, or testing workflow prompts. Most users should use `story` or `epic` instead.
 
 ---
 
@@ -203,23 +160,11 @@ Execute an arbitrary prompt with Claude.
 bmaduum raw <prompt>
 ```
 
-**Arguments:**
-| Argument | Required | Description |
-|----------|----------|-------------|
-| prompt | Yes | The prompt text (can be multiple words) |
-
 **Example:**
 
 ```bash
 bmaduum raw "List all Go files in the project"
-bmaduum raw Explain the architecture of this codebase
 ```
-
-**Behavior:**
-
-1. Joins all arguments into a single prompt
-2. Executes Claude directly with the prompt
-3. Does not use any workflow templates
 
 ---
 
@@ -227,17 +172,8 @@ bmaduum raw Explain the architecture of this codebase
 
 Display version information.
 
-**Usage:**
-
 ```bash
 bmaduum version
-```
-
-**Example:**
-
-```bash
-bmaduum version
-# Output: bmaduum 1.0.0 (build: abc1234)
 ```
 
 ---
@@ -254,46 +190,77 @@ bmaduum version
 
 ## Environment Variables
 
-| Variable           | Description                | Default                   |
-| ------------------ | -------------------------- | ------------------------- |
-| `BMADUUM_CONFIG_PATH` | Path to configuration file | `./config/workflows.yaml` |
-| `BMADUUM_CLAUDE_PATH` | Path to claude command/binary | `claude` (from PATH)  |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BMADUUM_CONFIG_PATH` | Path to configuration file | auto-discovered |
+| `BMADUUM_CLAUDE_PATH` | Path to claude binary | `claude` |
+| `BMADUUM_SPRINT_STATUS_PATH` | Path to sprint-status.yaml | auto-discovered |
 
 ---
 
 ## Configuration File
 
-The default configuration file is `config/workflows.yaml`:
+Configuration is loaded from (in priority order):
+
+1. `BMADUUM_CONFIG_PATH` environment variable
+2. `~/.config/bmaduum/workflows.yaml` (Linux) or platform equivalent
+3. `./config/workflows.yaml` (legacy)
+4. `./workflows.yaml` (legacy)
+5. Built-in defaults
+
+### Example Configuration
 
 ```yaml
+# Use BMAD v6 slash commands (true) or legacy prompt templates (false)
+use_slash_commands: true
+
+# Explicit sprint-status.yaml path (auto-discovered if empty)
+# status_path: ""
+
 workflows:
   create-story:
-    prompt_template: "Create story: {{.StoryKey}}"
+    slash_command: "/create-story {{.StoryKey}}"
+    prompt_template: "/bmad-bmm-create-story - Create story: {{.StoryKey}}. Do not ask questions."
 
   dev-story:
-    prompt_template: "Work on story: {{.StoryKey}}"
+    slash_command: "/dev-story {{.StoryKey}}"
+    prompt_template: "/bmad-bmm-dev-story - Work on story: {{.StoryKey}}..."
+    # model: opus  # Optional: override Claude model for this workflow
 
   code-review:
-    prompt_template: "Review story: {{.StoryKey}}"
+    slash_command: "/code-review {{.StoryKey}}"
+    prompt_template: "/bmad-bmm-code-review - Review story: {{.StoryKey}}..."
 
   git-commit:
-    prompt_template: "Commit changes for {{.StoryKey}}"
-
-full_cycle:
-  steps:
-    - create-story
-    - dev-story
-    - code-review
-    - git-commit
+    slash_command: "/git-commit {{.StoryKey}}"
+    prompt_template: "Commit all changes for story {{.StoryKey}}..."
 
 claude:
   output_format: stream-json
   binary_path: claude
 
 output:
-  truncate_lines: 20 # Max lines to show for tool output
-  truncate_length: 60 # Max chars for command header
+  truncate_lines: 20
+  truncate_length: 60
 ```
+
+### Configuration Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `use_slash_commands` | bool | `true` | Use v6 slash commands vs legacy prompt templates |
+| `status_path` | string | `""` | Explicit sprint-status.yaml path (auto-discovered if empty) |
+| `workflows.<name>.slash_command` | string | | BMAD v6 slash command template |
+| `workflows.<name>.prompt_template` | string | | Legacy prompt template |
+| `workflows.<name>.model` | string | `""` | Claude model override for this workflow |
+| `claude.binary_path` | string | `claude` | Path to Claude CLI binary |
+| `claude.output_format` | string | `stream-json` | Claude output format |
+| `output.truncate_lines` | int | `20` | Max lines for tool output display |
+| `output.truncate_length` | int | `60` | Max chars for command headers |
+
+### Prompt Mode
+
+When `use_slash_commands` is `true` (default), `GetPrompt()` returns the `slash_command` template. When `false`, it returns the `prompt_template`. If the selected template is empty, the other is used as fallback.
 
 ### Template Variables
 
@@ -305,11 +272,12 @@ output:
 
 ## Sprint Status File
 
-The `story` and `epic` commands read story status from:
+Auto-discovered in priority order:
 
-```
-_bmad-output/implementation-artifacts/sprint-status.yaml
-```
+1. `BMADUUM_SPRINT_STATUS_PATH` environment variable
+2. `status_path` config value
+3. `_bmad-output/implementation-artifacts/sprint-status.yaml` (v6 path)
+4. `sprint-status.yaml` (legacy path)
 
 **Format:**
 
@@ -331,85 +299,30 @@ development_status:
 
 ---
 
+## BMAD v6 Integration
+
+### Workflow Manifest
+
+If `_bmad/_cfg/workflow-manifest.csv` exists, bmaduum uses it for dynamic workflow routing instead of the hardcoded routing table. The manifest maps statuses to workflows, phases, and agents.
+
+### Module Discovery
+
+If `_bmad/_config/manifest.yaml` exists, bmaduum reads installed modules. When SDET or TEA modules are detected, `test-automation` is injected into the lifecycle after `code-review`. Module info is shown in `--dry-run` output.
+
+### bmad-help Fallback
+
+When a story has a status the router doesn't recognize, bmaduum invokes `/bmad-help` via Claude CLI to determine the next workflow. This is depth-limited (max 3 recursive calls) to prevent infinite loops. Disable with `--no-bmad-help`.
+
+---
+
 ## State File
 
 The lifecycle executor persists execution state for error recovery.
 
-**Location:**
-
-```
-.bmad-state.json   # In working directory (hidden file)
-```
-
-**Format:**
-
-```json
-{
-	"story_key": "6-1-setup-project",
-	"step_index": 2,
-	"total_steps": 4,
-	"start_status": "backlog"
-}
-```
-
-**Fields:**
-| Field | Description |
-|-------|-------------|
-| `story_key` | The story being processed |
-| `step_index` | 0-based index of the current/failed step |
-| `total_steps` | Total steps in the lifecycle sequence |
-| `start_status` | The story's status when execution began |
+**Location:** `.bmad-state.json` in the working directory.
 
 **Lifecycle:**
 
 1. **Saved on failure** - State is written when a workflow step fails
 2. **Used on resume** - On re-run, execution continues from current status
-3. **Cleared on success** - State file is deleted after successful lifecycle completion
-
----
-
-## Examples
-
-### Status-Based Automation (Recommended)
-
-```bash
-# Run full lifecycle for a single story
-bmaduum story 6-1-setup-project
-
-# Process multiple stories
-bmaduum story 6-1-setup 6-2-auth 6-3-tests
-
-# Process an entire epic
-bmaduum epic 6
-
-# Process all active epics
-bmaduum epic all
-```
-
-### Individual Workflow Steps (Advanced)
-
-```bash
-# Run a specific workflow step
-bmaduum workflow create-story 6-1-setup
-bmaduum workflow dev-story 6-1-setup
-bmaduum workflow code-review 6-1-setup
-bmaduum workflow git-commit 6-1-setup
-```
-
-### Ad-Hoc Tasks
-
-```bash
-# Run arbitrary prompts
-bmaduum raw "What is the test coverage?"
-bmaduum raw "Find all TODO comments"
-```
-
-### Custom Configuration
-
-```bash
-# Use custom config file
-BMADUUM_CONFIG_PATH=/path/to/config.yaml bmaduum story 6-1-setup
-
-# Use custom Claude binary
-BMADUUM_CLAUDE_PATH=/usr/local/bin/claude bmaduum workflow dev-story 6-1-setup
-```
+3. **Cleared on success** - State file is deleted after successful completion
