@@ -32,6 +32,12 @@ type Config struct {
 	// Keys are workflow names (e.g., "create-story", "dev-story").
 	Workflows map[string]WorkflowConfig `mapstructure:"workflows"`
 
+	// UseSlashCommands controls whether workflows invoke BMAD v6 slash commands
+	// or use legacy prompt templates. When true (default), GetPrompt returns
+	// the SlashCommand template. When false, it returns the PromptTemplate.
+	// Set to false for pre-v6 BMAD projects that use /bmad-bmm-* commands.
+	UseSlashCommands bool `mapstructure:"use_slash_commands"`
+
 	// FullCycle defines the steps for full lifecycle execution.
 	// Used by run, queue, and epic commands.
 	FullCycle FullCycleConfig `mapstructure:"full_cycle"`
@@ -45,12 +51,18 @@ type Config struct {
 
 // WorkflowConfig represents a single workflow configuration.
 //
-// Each workflow has a prompt template that is expanded with story data
-// using Go's text/template package.
+// Each workflow has two prompt modes: a SlashCommand for BMAD v6 projects
+// and a legacy PromptTemplate for older projects. The active mode is
+// controlled by [Config.UseSlashCommands].
 type WorkflowConfig struct {
-	// PromptTemplate is the Go template string for the workflow prompt.
-	// Use {{.StoryKey}} to reference the story key.
-	// Example: "Work on story: {{.StoryKey}}"
+	// SlashCommand is the BMAD v6 slash command template.
+	// Used when Config.UseSlashCommands is true (default).
+	// Example: "/dev-story {{.StoryKey}}"
+	SlashCommand string `mapstructure:"slash_command"`
+
+	// PromptTemplate is the legacy Go template string for the workflow prompt.
+	// Used when Config.UseSlashCommands is false.
+	// Example: "/bmad-bmm-dev-story - Work on story: {{.StoryKey}}"
 	PromptTemplate string `mapstructure:"prompt_template"`
 
 	// Model is the Claude model to use for this workflow.
@@ -132,17 +144,22 @@ type MarkdownConfig struct {
 // configuration file.
 func DefaultConfig() *Config {
 	return &Config{
+		UseSlashCommands: true,
 		Workflows: map[string]WorkflowConfig{
 			"create-story": {
+				SlashCommand:   "/create-story {{.StoryKey}}",
 				PromptTemplate: "/bmad-bmm-create-story - Create story: {{.StoryKey}}. Do not ask questions.",
 			},
 			"dev-story": {
+				SlashCommand:   "/dev-story {{.StoryKey}}",
 				PromptTemplate: "/bmad-bmm-dev-story - Work on story: {{.StoryKey}}. Complete all tasks. Run tests after each implementation. Do not ask clarifying questions - use best judgment based on existing patterns.",
 			},
 			"code-review": {
+				SlashCommand:   "/code-review {{.StoryKey}}",
 				PromptTemplate: "/bmad-bmm-code-review - Review story: {{.StoryKey}}. When presenting fix options, always choose to auto-fix all issues immediately. Do not wait for user input.",
 			},
 			"git-commit": {
+				SlashCommand:   "/git-commit {{.StoryKey}}",
 				PromptTemplate: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format. Then push to the current branch. Do not ask questions.",
 			},
 		},

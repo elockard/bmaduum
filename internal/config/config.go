@@ -130,6 +130,11 @@ func (l *Loader) LoadFromFile(path string) (*Config, error) {
 // The workflowName must match a key in the Workflows map. The storyKey is
 // substituted into the workflow's prompt template using Go's text/template.
 //
+// When [Config.UseSlashCommands] is true (default), the workflow's SlashCommand
+// template is used (e.g., "/dev-story {{.StoryKey}}"). When false, the legacy
+// PromptTemplate is used instead. If the selected template is empty, the other
+// template is used as a fallback.
+//
 // Returns an error if the workflow is not found or if template expansion fails.
 func (c *Config) GetPrompt(workflowName, storyKey string) (string, error) {
 	workflow, ok := c.Workflows[workflowName]
@@ -137,7 +142,25 @@ func (c *Config) GetPrompt(workflowName, storyKey string) (string, error) {
 		return "", fmt.Errorf("unknown workflow: %s", workflowName)
 	}
 
-	return expandTemplate(workflow.PromptTemplate, PromptData{StoryKey: storyKey})
+	tmpl := workflow.SlashCommand
+	if !c.UseSlashCommands {
+		tmpl = workflow.PromptTemplate
+	}
+
+	// Fallback: if the selected template is empty, use the other one
+	if tmpl == "" {
+		if c.UseSlashCommands {
+			tmpl = workflow.PromptTemplate
+		} else {
+			tmpl = workflow.SlashCommand
+		}
+	}
+
+	if tmpl == "" {
+		return "", fmt.Errorf("workflow %s has no prompt template or slash command configured", workflowName)
+	}
+
+	return expandTemplate(tmpl, PromptData{StoryKey: storyKey})
 }
 
 // GetFullCycleSteps returns the list of workflow steps for a full lifecycle.

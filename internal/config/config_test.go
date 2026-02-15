@@ -18,6 +18,9 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Contains(t, cfg.Workflows, "code-review")
 	assert.Contains(t, cfg.Workflows, "git-commit")
 
+	// Check slash commands enabled by default
+	assert.True(t, cfg.UseSlashCommands)
+
 	// Check full cycle steps
 	assert.Equal(t, []string{"create-story", "dev-story", "code-review", "git-commit"}, cfg.FullCycle.Steps)
 
@@ -327,10 +330,11 @@ func TestLoader_LoadFromFile_DifferentExtension(t *testing.T) {
 func TestDefaultConfig_WorkflowTemplates(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// Verify each workflow has a non-empty template
+	// Verify each workflow has both slash command and legacy template
 	for name, workflow := range cfg.Workflows {
 		t.Run(name, func(t *testing.T) {
-			assert.NotEmpty(t, workflow.PromptTemplate, "workflow %s should have a template", name)
+			assert.NotEmpty(t, workflow.PromptTemplate, "workflow %s should have a legacy template", name)
+			assert.NotEmpty(t, workflow.SlashCommand, "workflow %s should have a slash command", name)
 		})
 	}
 }
@@ -368,4 +372,152 @@ func TestEnsureConfigDir(t *testing.T) {
 		// Not a "not implemented" error
 		assert.NotContains(t, err.Error(), "not implemented")
 	}
+}
+
+func TestGetPrompt_SlashCommandMode(t *testing.T) {
+	cfg := DefaultConfig()
+	assert.True(t, cfg.UseSlashCommands)
+
+	prompt, err := cfg.GetPrompt("dev-story", "6-1-implement-auth")
+	require.NoError(t, err)
+	assert.Equal(t, "/dev-story 6-1-implement-auth", prompt)
+}
+
+func TestGetPrompt_LegacyMode(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.UseSlashCommands = false
+
+	prompt, err := cfg.GetPrompt("dev-story", "6-1-implement-auth")
+	require.NoError(t, err)
+	assert.Contains(t, prompt, "/bmad-bmm-dev-story")
+	assert.Contains(t, prompt, "6-1-implement-auth")
+}
+
+func TestGetPrompt_SlashCommandMode_AllWorkflows(t *testing.T) {
+	cfg := DefaultConfig()
+
+	expected := map[string]string{
+		"create-story": "/create-story test-key",
+		"dev-story":    "/dev-story test-key",
+		"code-review":  "/code-review test-key",
+		"git-commit":   "/git-commit test-key",
+	}
+
+	for wf, want := range expected {
+		t.Run(wf, func(t *testing.T) {
+			prompt, err := cfg.GetPrompt(wf, "test-key")
+			assert.NoError(t, err)
+			assert.Equal(t, want, prompt)
+		})
+	}
+}
+
+func TestGetPrompt_LegacyMode_AllWorkflows(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.UseSlashCommands = false
+
+	for _, wf := range []string{"create-story", "dev-story", "code-review", "git-commit"} {
+		t.Run(wf, func(t *testing.T) {
+			prompt, err := cfg.GetPrompt(wf, "test-key")
+			assert.NoError(t, err)
+			assert.Contains(t, prompt, "test-key")
+			// Legacy prompts should NOT start with the v6 slash command
+			assert.NotEqual(t, "/"+wf+" test-key", prompt)
+		})
+	}
+}
+
+func TestGetPrompt_FallbackToLegacy(t *testing.T) {
+	// When UseSlashCommands is true but SlashCommand is empty, fall back to PromptTemplate
+	cfg := &Config{
+		UseSlashCommands: true,
+		Workflows: map[string]WorkflowConfig{
+			"custom": {
+				PromptTemplate: "Legacy: {{.StoryKey}}",
+				// SlashCommand intentionally empty
+			},
+		},
+	}
+
+	prompt, err := cfg.GetPrompt("custom", "key-1")
+	require.NoError(t, err)
+	assert.Equal(t, "Legacy: key-1", prompt)
+}
+
+func TestGetPrompt_FallbackToSlashCommand(t *testing.T) {
+	// When UseSlashCommands is false but PromptTemplate is empty, fall back to SlashCommand
+	cfg := &Config{
+		UseSlashCommands: false,
+		Workflows: map[string]WorkflowConfig{
+			"custom": {
+				SlashCommand: "/custom {{.StoryKey}}",
+				// PromptTemplate intentionally empty
+			},
+		},
+	}
+
+	prompt, err := cfg.GetPrompt("custom", "key-1")
+	require.NoError(t, err)
+	assert.Equal(t, "/custom key-1", prompt)
+}
+
+func TestGetPrompt_BothEmpty(t *testing.T) {
+	cfg := &Config{
+		UseSlashCommands: true,
+		Workflows: map[string]WorkflowConfig{
+			"empty": {},
+		},
+	}
+
+	_, err := cfg.GetPrompt("empty", "key-1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no prompt template or slash command configured")
+}
+
+func TestLoader_LoadFromFile_WithSlashCommands(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "test-config.yaml")
+
+	configContent := `
+use_slash_commands: true
+workflows:
+  dev-story:
+    slash_command: "/dev-story {{.StoryKey}}"
+    prompt_template: "Legacy dev: {{.StoryKey}}"
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	loader := NewLoader()
+	cfg, err := loader.LoadFromFile(configPath)
+
+	require.NoError(t, err)
+	assert.True(t, cfg.UseSlashCommands)
+	assert.Equal(t, "/dev-story {{.StoryKey}}", cfg.Workflows["dev-story"].SlashCommand)
+	assert.Equal(t, "Legacy dev: {{.StoryKey}}", cfg.Workflows["dev-story"].PromptTemplate)
+}
+
+func TestLoader_LoadFromFile_LegacyMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "test-config.yaml")
+
+	configContent := `
+use_slash_commands: false
+workflows:
+  dev-story:
+    slash_command: "/dev-story {{.StoryKey}}"
+    prompt_template: "Legacy dev: {{.StoryKey}}"
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	loader := NewLoader()
+	cfg, err := loader.LoadFromFile(configPath)
+
+	require.NoError(t, err)
+	assert.False(t, cfg.UseSlashCommands)
+
+	prompt, err := cfg.GetPrompt("dev-story", "test-key")
+	require.NoError(t, err)
+	assert.Equal(t, "Legacy dev: test-key", prompt)
 }
