@@ -42,6 +42,12 @@ type Config struct {
 	// Used by run, queue, and epic commands.
 	FullCycle FullCycleConfig `mapstructure:"full_cycle"`
 
+	// StatusPath is an explicit path to the sprint-status.yaml file.
+	// If empty (default), the status package auto-discovers the file by
+	// checking the v6 path then legacy path. Can also be set via
+	// BMADUUM_SPRINT_STATUS_PATH environment variable (which takes priority).
+	StatusPath string `mapstructure:"status_path"`
+
 	// Claude contains Claude CLI binary configuration.
 	Claude ClaudeConfig `mapstructure:"claude"`
 

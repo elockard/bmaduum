@@ -3,27 +3,38 @@ package status
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Writer writes sprint status updates to YAML files at [DefaultStatusPath].
+// Writer writes sprint status updates to YAML files.
 //
 // It uses yaml.v3's Node API to preserve comments, ordering, and formatting
 // when updating status values. Writes are performed atomically using a
 // temporary file and rename pattern to prevent corruption.
 type Writer struct {
-	basePath string
+	statusPath string
 }
 
-// NewWriter creates a new [Writer] with the specified base path.
+// NewWriter creates a new [Writer] that auto-discovers the status file.
 //
 // The basePath is the project root directory. Pass an empty string to use
-// the current working directory.
+// the current working directory. The writer searches for sprint-status.yaml
+// at the v6 path first, then falls back to the legacy root-level path.
+// The BMADUUM_SPRINT_STATUS_PATH environment variable overrides all discovery.
 func NewWriter(basePath string) *Writer {
 	return &Writer{
-		basePath: basePath,
+		statusPath: ResolvePath(basePath, ""),
+	}
+}
+
+// NewWriterWithPath creates a new [Writer] that uses the specified status file path.
+//
+// The statusPath can be an absolute path or a path relative to the working directory.
+// The BMADUUM_SPRINT_STATUS_PATH environment variable still takes priority if set.
+func NewWriterWithPath(basePath, statusPath string) *Writer {
+	return &Writer{
+		statusPath: ResolvePath(basePath, statusPath),
 	}
 }
 
@@ -43,7 +54,7 @@ func (w *Writer) UpdateStatus(storyKey string, newStatus Status) error {
 		return fmt.Errorf("invalid status: %s", newStatus)
 	}
 
-	fullPath := filepath.Join(w.basePath, DefaultStatusPath)
+	fullPath := w.statusPath
 
 	// Read existing file
 	data, err := os.ReadFile(fullPath)

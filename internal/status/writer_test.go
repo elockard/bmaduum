@@ -13,7 +13,7 @@ func TestNewWriter(t *testing.T) {
 	writer := NewWriter("/some/path")
 
 	assert.NotNil(t, writer)
-	assert.Equal(t, "/some/path", writer.basePath)
+	assert.Contains(t, writer.statusPath, "sprint-status.yaml")
 }
 
 func TestWriter_UpdateStatus_Success(t *testing.T) {

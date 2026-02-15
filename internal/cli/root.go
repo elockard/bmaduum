@@ -142,8 +142,8 @@ func NewApp(cfg *config.Config) *App {
 	})
 
 	runner := workflow.NewRunner(executor, printer, cfg)
-	statusReader := status.NewReader("")
-	statusWriter := status.NewWriter("")
+	statusReader := status.NewReaderWithPath("", cfg.StatusPath)
+	statusWriter := status.NewWriterWithPath("", cfg.StatusPath)
 
 	return &App{
 		Config:       cfg,

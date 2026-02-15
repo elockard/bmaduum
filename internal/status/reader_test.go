@@ -13,7 +13,7 @@ func TestNewReader(t *testing.T) {
 	reader := NewReader("/some/path")
 
 	assert.NotNil(t, reader)
-	assert.Equal(t, "/some/path", reader.basePath)
+	assert.Contains(t, reader.statusPath, "sprint-status.yaml")
 }
 
 func TestReader_Read_Success(t *testing.T) {
@@ -286,4 +286,157 @@ func TestReader_GetEpicStories_FileNotFound(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, stories)
 	assert.Contains(t, err.Error(), "failed to read sprint status")
+}
+
+// --- Path Resolution Tests ---
+
+func TestResolvePath_EnvVarOverride(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "/custom/env/path/status.yaml")
+
+	path := ResolvePath("/base", "")
+	assert.Equal(t, "/custom/env/path/status.yaml", path)
+}
+
+func TestResolvePath_EnvVarOverridesExplicitPath(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "/env/override.yaml")
+
+	path := ResolvePath("/base", "/explicit/path.yaml")
+	assert.Equal(t, "/env/override.yaml", path)
+}
+
+func TestResolvePath_ExplicitPath(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+
+	path := ResolvePath("/base", "/explicit/status.yaml")
+	assert.Equal(t, "/explicit/status.yaml", path)
+}
+
+func TestResolvePath_DiscoversV6Path(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+	tmpDir := t.TempDir()
+
+	// Create the v6 directory structure
+	statusDir := filepath.Join(tmpDir, "_bmad-output", "implementation-artifacts")
+	err := os.MkdirAll(statusDir, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(statusDir, "sprint-status.yaml"), []byte("{}"), 0644)
+	require.NoError(t, err)
+
+	path := ResolvePath(tmpDir, "")
+	assert.Equal(t, filepath.Join(tmpDir, V6StatusPath), path)
+}
+
+func TestResolvePath_FallsBackToLegacyPath(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+	tmpDir := t.TempDir()
+
+	// Create only the legacy file (no v6 directory)
+	err := os.WriteFile(filepath.Join(tmpDir, "sprint-status.yaml"), []byte("{}"), 0644)
+	require.NoError(t, err)
+
+	path := ResolvePath(tmpDir, "")
+	assert.Equal(t, filepath.Join(tmpDir, LegacyStatusPath), path)
+}
+
+func TestResolvePath_DefaultsToV6WhenNothingFound(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+	tmpDir := t.TempDir()
+
+	// No status files exist
+	path := ResolvePath(tmpDir, "")
+	assert.Equal(t, filepath.Join(tmpDir, V6StatusPath), path)
+}
+
+func TestResolvePath_V6TakesPriorityOverLegacy(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+	tmpDir := t.TempDir()
+
+	// Create both files
+	statusDir := filepath.Join(tmpDir, "_bmad-output", "implementation-artifacts")
+	err := os.MkdirAll(statusDir, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(statusDir, "sprint-status.yaml"), []byte("v6"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tmpDir, "sprint-status.yaml"), []byte("legacy"), 0644)
+	require.NoError(t, err)
+
+	path := ResolvePath(tmpDir, "")
+	assert.Equal(t, filepath.Join(tmpDir, V6StatusPath), path)
+}
+
+func TestNewReaderWithPath_UsesExplicitPath(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+
+	reader := NewReaderWithPath("/base", "/explicit/status.yaml")
+	assert.Equal(t, "/explicit/status.yaml", reader.statusPath)
+}
+
+func TestNewWriterWithPath_UsesExplicitPath(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+
+	writer := NewWriterWithPath("/base", "/explicit/status.yaml")
+	assert.Equal(t, "/explicit/status.yaml", writer.statusPath)
+}
+
+func TestReader_LegacyPath_ReadSuccess(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+	tmpDir := t.TempDir()
+
+	// Create only the legacy file (no v6 directory)
+	statusContent := `development_status:
+  7-1-define-schema: ready-for-dev
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "sprint-status.yaml"), []byte(statusContent), 0644)
+	require.NoError(t, err)
+
+	reader := NewReader(tmpDir)
+	status, err := reader.GetStoryStatus("7-1-define-schema")
+
+	require.NoError(t, err)
+	assert.Equal(t, StatusReadyForDev, status)
+}
+
+func TestWriter_LegacyPath_UpdateSuccess(t *testing.T) {
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", "")
+	tmpDir := t.TempDir()
+
+	// Create only the legacy file (no v6 directory)
+	statusContent := `development_status:
+  7-1-define-schema: ready-for-dev
+`
+	err := os.WriteFile(filepath.Join(tmpDir, "sprint-status.yaml"), []byte(statusContent), 0644)
+	require.NoError(t, err)
+
+	writer := NewWriter(tmpDir)
+	err = writer.UpdateStatus("7-1-define-schema", StatusInProgress)
+	require.NoError(t, err)
+
+	reader := NewReader(tmpDir)
+	status, err := reader.GetStoryStatus("7-1-define-schema")
+	require.NoError(t, err)
+	assert.Equal(t, StatusInProgress, status)
+}
+
+func TestReader_EnvVarOverride_ReadSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Put the file at a custom location
+	customPath := filepath.Join(tmpDir, "custom", "my-status.yaml")
+	err := os.MkdirAll(filepath.Dir(customPath), 0755)
+	require.NoError(t, err)
+
+	statusContent := `development_status:
+  7-1-define-schema: review
+`
+	err = os.WriteFile(customPath, []byte(statusContent), 0644)
+	require.NoError(t, err)
+
+	t.Setenv("BMADUUM_SPRINT_STATUS_PATH", customPath)
+
+	// basePath is irrelevant since env var overrides
+	reader := NewReader("/nonexistent/base")
+	status, err := reader.GetStoryStatus("7-1-define-schema")
+
+	require.NoError(t, err)
+	assert.Equal(t, StatusReview, status)
 }

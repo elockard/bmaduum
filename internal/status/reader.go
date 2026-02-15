@@ -11,26 +11,85 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DefaultStatusPath is the canonical location of the sprint-status.yaml file
-// relative to the project root. This path is used by both [Reader] and [Writer].
-const DefaultStatusPath = "_bmad-output/implementation-artifacts/sprint-status.yaml"
+// V6StatusPath is the BMAD v6 canonical location of sprint-status.yaml
+// relative to the project root.
+const V6StatusPath = "_bmad-output/implementation-artifacts/sprint-status.yaml"
 
-// Reader reads sprint status from YAML files at [DefaultStatusPath].
-//
-// The basePath field specifies the project root directory. When empty,
-// the current working directory is used. The full path to the status file
-// is constructed as: basePath + DefaultStatusPath.
-type Reader struct {
-	basePath string
+// LegacyStatusPath is the pre-v6 location of sprint-status.yaml at the
+// project root.
+const LegacyStatusPath = "sprint-status.yaml"
+
+// DefaultStatusPath is an alias for V6StatusPath for backward compatibility.
+const DefaultStatusPath = V6StatusPath
+
+// StatusPaths lists the paths to search (in priority order) when auto-discovering
+// the sprint-status.yaml file.
+var StatusPaths = []string{
+	V6StatusPath,
+	LegacyStatusPath,
 }
 
-// NewReader creates a new [Reader] with the specified base path.
+// ResolvePath discovers the sprint-status.yaml file location.
+//
+// Resolution order:
+//  1. BMADUUM_SPRINT_STATUS_PATH environment variable (used as-is if set)
+//  2. Explicit statusPath parameter (if non-empty)
+//  3. Auto-discovery: tries v6 path, then legacy path under basePath
+//  4. Falls back to v6 path (will error on read if file doesn't exist)
+//
+// The basePath is the project root directory. Pass empty string for cwd.
+// The statusPath is an explicit override (e.g., from config). Pass empty
+// string for auto-discovery.
+func ResolvePath(basePath, statusPath string) string {
+	// 1. Environment variable takes highest priority
+	if envPath := os.Getenv("BMADUUM_SPRINT_STATUS_PATH"); envPath != "" {
+		return envPath
+	}
+
+	// 2. Explicit path from config
+	if statusPath != "" {
+		return statusPath
+	}
+
+	// 3. Auto-discover by checking each path
+	for _, p := range StatusPaths {
+		fullPath := filepath.Join(basePath, p)
+		if _, err := os.Stat(fullPath); err == nil {
+			return fullPath
+		}
+	}
+
+	// 4. Default to v6 path
+	return filepath.Join(basePath, V6StatusPath)
+}
+
+// Reader reads sprint status from YAML files.
+//
+// The statusPath field holds the resolved full path to the sprint-status.yaml file.
+// Use [NewReader] for auto-discovery or [NewReaderWithPath] for an explicit path.
+type Reader struct {
+	statusPath string
+}
+
+// NewReader creates a new [Reader] that auto-discovers the status file.
 //
 // The basePath is the project root directory. Pass an empty string to use
-// the current working directory.
+// the current working directory. The reader searches for sprint-status.yaml
+// at the v6 path first, then falls back to the legacy root-level path.
+// The BMADUUM_SPRINT_STATUS_PATH environment variable overrides all discovery.
 func NewReader(basePath string) *Reader {
 	return &Reader{
-		basePath: basePath,
+		statusPath: ResolvePath(basePath, ""),
+	}
+}
+
+// NewReaderWithPath creates a new [Reader] that uses the specified status file path.
+//
+// The statusPath can be an absolute path or a path relative to the working directory.
+// The BMADUUM_SPRINT_STATUS_PATH environment variable still takes priority if set.
+func NewReaderWithPath(basePath, statusPath string) *Reader {
+	return &Reader{
+		statusPath: ResolvePath(basePath, statusPath),
 	}
 }
 
@@ -39,7 +98,7 @@ func NewReader(basePath string) *Reader {
 // It returns the full [SprintStatus] structure containing all story statuses.
 // Returns an error if the file cannot be read or parsed.
 func (r *Reader) Read() (*SprintStatus, error) {
-	fullPath := filepath.Join(r.basePath, DefaultStatusPath)
+	fullPath := r.statusPath
 
 	data, err := os.ReadFile(fullPath)
 	if err != nil {

@@ -2,6 +2,12 @@
 # Set to false for pre-v6 BMAD projects that use /bmad-bmm-* commands.
 use_slash_commands: true
 
+# Explicit path to sprint-status.yaml. If empty, auto-discovers:
+#   1. _bmad-output/implementation-artifacts/sprint-status.yaml (v6)
+#   2. sprint-status.yaml (legacy)
+# Can also be overridden with BMADUUM_SPRINT_STATUS_PATH env var.
+# status_path: ""
+
 workflows:
   create-story:
     slash_command: "/create-story {{.StoryKey}}"
