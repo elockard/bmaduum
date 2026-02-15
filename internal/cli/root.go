@@ -26,8 +26,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bmaduum/internal/bmadhelp"
 	"bmaduum/internal/claude"
 	"bmaduum/internal/config"
+	"bmaduum/internal/lifecycle"
 	"bmaduum/internal/manifest"
 	"bmaduum/internal/output"
 	"bmaduum/internal/output/core"
@@ -127,6 +129,11 @@ type App struct {
 
 	// Modules holds discovered BMAD modules, or nil if no module manifest found.
 	Modules *manifest.ModuleManifest
+
+	// BmadHelp is the optional bmad-help fallback for resolving unknown statuses.
+	// If nil, unknown statuses produce an immediate error. Set via NewApp or
+	// directly in tests.
+	BmadHelp lifecycle.BmadHelpFallback
 }
 
 // NewApp creates a new [App] with all production dependencies wired up.
@@ -182,6 +189,7 @@ func NewApp(cfg *config.Config) *App {
 		StatusWriter: statusWriter,
 		Router:       wfRouter,
 		Modules:      modules,
+		BmadHelp:     bmadhelp.NewClaudeFallback(executor),
 	}
 }
 

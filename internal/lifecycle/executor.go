@@ -12,11 +12,17 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"bmaduum/internal/router"
 	"bmaduum/internal/status"
 )
+
+// maxBmadHelpDepth limits recursive Execute calls when bmad-help resolves
+// unknown statuses. This prevents infinite loops if bmad-help repeatedly
+// returns statuses that the router doesn't recognize.
+const maxBmadHelpDepth = 3
 
 // WorkflowRunner is the interface for executing individual workflows.
 //
@@ -43,6 +49,19 @@ type StatusWriter interface {
 	UpdateStatus(storyKey string, newStatus status.Status) error
 }
 
+// BmadHelpFallback resolves unknown statuses by invoking /bmad-help via Claude CLI.
+//
+// This is a last-resort fallback used when the standard router returns
+// [router.ErrUnknownStatus]. Implementations should invoke /bmad-help and
+// parse the response to determine the next workflow to execute.
+//
+// See the bmadhelp package for the production implementation.
+type BmadHelpFallback interface {
+	// ResolveWorkflow determines the next workflow for a story with an unknown status.
+	// Returns the workflow name and expected next status.
+	ResolveWorkflow(ctx context.Context, storyKey string, currentStatus status.Status) (workflow string, nextStatus status.Status, err error)
+}
+
 // ProgressCallback is invoked before each workflow step begins execution.
 //
 // The callback receives stepIndex (1-based), totalSteps count, and the workflow name.
@@ -64,6 +83,7 @@ type Executor struct {
 	statusWriter     StatusWriter
 	progressCallback ProgressCallback
 	router           *router.Router
+	bmadHelp         BmadHelpFallback
 }
 
 // NewExecutor creates a new Executor with the required dependencies.
@@ -86,6 +106,17 @@ func NewExecutor(runner WorkflowRunner, reader StatusReader, writer StatusWriter
 // If not set (or set to nil), the default package-level router functions are used.
 func (e *Executor) SetRouter(r *router.Router) {
 	e.router = r
+}
+
+// SetBmadHelp configures an optional bmad-help fallback for resolving unknown statuses.
+//
+// When set, the executor will invoke /bmad-help via Claude CLI as a last resort
+// when the router returns [router.ErrUnknownStatus]. This enables handling of
+// non-standard status values that aren't in the routing table.
+//
+// If not set (or set to nil), unknown statuses produce an immediate error.
+func (e *Executor) SetBmadHelp(fb BmadHelpFallback) {
+	e.bmadHelp = fb
 }
 
 // getLifecycle delegates to the configured router or falls back to the package-level function.
@@ -111,10 +142,22 @@ func (e *Executor) SetProgressCallback(cb ProgressCallback) {
 // via [router.GetLifecycle], and runs each workflow in sequence. After each successful
 // workflow, the story status is updated to the next state.
 //
+// When the router returns [router.ErrUnknownStatus] and a bmad-help fallback is
+// configured (via [SetBmadHelp]), Execute invokes /bmad-help to get a single
+// workflow recommendation. After executing that recommendation, it re-reads the
+// status and continues with normal routing. This recursion is depth-limited to
+// prevent infinite loops.
+//
 // Execute uses fail-fast behavior: it stops on the first error and returns immediately.
 // Errors can occur from status lookup failure, workflow execution failure (non-zero exit),
 // or status update failure. For stories already done, Execute returns [router.ErrStoryComplete].
 func (e *Executor) Execute(ctx context.Context, storyKey string) error {
+	return e.executeWithDepth(ctx, storyKey, 0)
+}
+
+// executeWithDepth is the internal implementation of Execute with depth tracking
+// for bmad-help fallback recursion.
+func (e *Executor) executeWithDepth(ctx context.Context, storyKey string, depth int) error {
 	// Get current story status
 	currentStatus, err := e.statusReader.GetStoryStatus(storyKey)
 	if err != nil {
@@ -123,8 +166,26 @@ func (e *Executor) Execute(ctx context.Context, storyKey string) error {
 
 	// Get lifecycle steps from current status
 	steps, err := e.getLifecycle(currentStatus)
+	usedBmadHelp := false
 	if err != nil {
-		return err // Returns router.ErrStoryComplete for done stories
+		if errors.Is(err, router.ErrUnknownStatus) && e.bmadHelp != nil {
+			if depth >= maxBmadHelpDepth {
+				return fmt.Errorf("unknown status %q: bmad-help fallback exceeded maximum depth (%d)", currentStatus, maxBmadHelpDepth)
+			}
+
+			workflow, nextStatus, helpErr := e.bmadHelp.ResolveWorkflow(ctx, storyKey, currentStatus)
+			if helpErr != nil {
+				return fmt.Errorf("unknown status %q and bmad-help fallback failed: %w", currentStatus, helpErr)
+			}
+
+			steps = []router.LifecycleStep{{
+				Workflow:   workflow,
+				NextStatus: nextStatus,
+			}}
+			usedBmadHelp = true
+		} else {
+			return err // Returns router.ErrStoryComplete for done stories, or ErrUnknownStatus without fallback
+		}
 	}
 
 	// Get total steps count for progress reporting
@@ -147,6 +208,12 @@ func (e *Executor) Execute(ctx context.Context, storyKey string) error {
 		if err := e.statusWriter.UpdateStatus(storyKey, step.NextStatus); err != nil {
 			return err
 		}
+	}
+
+	// If bmad-help bridged us from an unknown status, re-execute to continue
+	// the lifecycle from the new (hopefully recognized) status.
+	if usedBmadHelp {
+		return e.executeWithDepth(ctx, storyKey, depth+1)
 	}
 
 	return nil

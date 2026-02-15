@@ -308,6 +308,175 @@ func TestProgressCallbackNotSet(t *testing.T) {
 	assert.Len(t, runner.Calls, 4) // All 4 workflows should run
 }
 
+// MockBmadHelpFallback implements BmadHelpFallback for testing.
+type MockBmadHelpFallback struct {
+	Workflow   string
+	NextStatus status.Status
+	Err        error
+	Calls      []struct {
+		StoryKey      string
+		CurrentStatus status.Status
+	}
+}
+
+func (m *MockBmadHelpFallback) ResolveWorkflow(ctx context.Context, storyKey string, currentStatus status.Status) (string, status.Status, error) {
+	m.Calls = append(m.Calls, struct {
+		StoryKey      string
+		CurrentStatus status.Status
+	}{storyKey, currentStatus})
+
+	if m.Err != nil {
+		return "", "", m.Err
+	}
+	return m.Workflow, m.NextStatus, nil
+}
+
+func TestExecute_BmadHelpFallback(t *testing.T) {
+	t.Run("unknown status with bmad-help resolves and continues lifecycle", func(t *testing.T) {
+		// Story starts with unknown status "pending-qa", bmad-help recommends code-review.
+		// After code-review, status becomes "review" (recognized), so lifecycle continues normally.
+		callCount := 0
+		reader := &MockStatusReader{
+			GetStoryStatusFunc: func(storyKey string) (status.Status, error) {
+				callCount++
+				if callCount == 1 {
+					return status.Status("pending-qa"), nil // unknown status
+				}
+				return status.StatusReview, nil // after bmad-help step, now at review
+			},
+		}
+		runner := &MockWorkflowRunner{}
+		writer := &MockStatusWriter{}
+		bmadHelp := &MockBmadHelpFallback{
+			Workflow:   "code-review",
+			NextStatus: status.StatusReview,
+		}
+
+		executor := NewExecutor(runner, reader, writer)
+		executor.SetBmadHelp(bmadHelp)
+
+		err := executor.Execute(context.Background(), "STORY-1")
+		require.NoError(t, err)
+
+		// bmad-help should have been called once
+		require.Len(t, bmadHelp.Calls, 1)
+		assert.Equal(t, "STORY-1", bmadHelp.Calls[0].StoryKey)
+		assert.Equal(t, status.Status("pending-qa"), bmadHelp.Calls[0].CurrentStatus)
+
+		// Should have run: code-review (from bmad-help) + code-review + git-commit (from normal routing)
+		require.Len(t, runner.Calls, 3)
+		assert.Equal(t, "code-review", runner.Calls[0].WorkflowName) // bmad-help step
+		assert.Equal(t, "code-review", runner.Calls[1].WorkflowName) // normal routing
+		assert.Equal(t, "git-commit", runner.Calls[2].WorkflowName)  // normal routing
+
+		// Status updates: review (bmad-help), done (code-review), done (git-commit)
+		require.Len(t, writer.Calls, 3)
+		assert.Equal(t, status.StatusReview, writer.Calls[0].NewStatus)
+		assert.Equal(t, status.StatusDone, writer.Calls[1].NewStatus)
+		assert.Equal(t, status.StatusDone, writer.Calls[2].NewStatus)
+	})
+
+	t.Run("unknown status with bmad-help resolves to done", func(t *testing.T) {
+		// Story starts with unknown status, bmad-help recommends git-commit with done.
+		// After git-commit, story is done.
+		callCount := 0
+		reader := &MockStatusReader{
+			GetStoryStatusFunc: func(storyKey string) (status.Status, error) {
+				callCount++
+				if callCount == 1 {
+					return status.Status("awaiting-merge"), nil // unknown status
+				}
+				return status.StatusDone, nil // after bmad-help step, now done
+			},
+		}
+		runner := &MockWorkflowRunner{}
+		writer := &MockStatusWriter{}
+		bmadHelp := &MockBmadHelpFallback{
+			Workflow:   "git-commit",
+			NextStatus: status.StatusDone,
+		}
+
+		executor := NewExecutor(runner, reader, writer)
+		executor.SetBmadHelp(bmadHelp)
+
+		err := executor.Execute(context.Background(), "STORY-1")
+		// Should get ErrStoryComplete from the recursive call
+		assert.ErrorIs(t, err, router.ErrStoryComplete)
+
+		// bmad-help was called once
+		require.Len(t, bmadHelp.Calls, 1)
+
+		// git-commit was executed
+		require.Len(t, runner.Calls, 1)
+		assert.Equal(t, "git-commit", runner.Calls[0].WorkflowName)
+	})
+
+	t.Run("unknown status without bmad-help returns error", func(t *testing.T) {
+		reader := &MockStatusReader{
+			GetStoryStatusFunc: func(storyKey string) (status.Status, error) {
+				return status.Status("weird-status"), nil
+			},
+		}
+		runner := &MockWorkflowRunner{}
+		writer := &MockStatusWriter{}
+
+		executor := NewExecutor(runner, reader, writer)
+		// No bmad-help set
+
+		err := executor.Execute(context.Background(), "STORY-1")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, router.ErrUnknownStatus)
+		assert.Empty(t, runner.Calls)
+	})
+
+	t.Run("bmad-help failure returns wrapped error", func(t *testing.T) {
+		reader := &MockStatusReader{
+			GetStoryStatusFunc: func(storyKey string) (status.Status, error) {
+				return status.Status("weird-status"), nil
+			},
+		}
+		runner := &MockWorkflowRunner{}
+		writer := &MockStatusWriter{}
+		bmadHelp := &MockBmadHelpFallback{
+			Err: errors.New("Claude CLI not found"),
+		}
+
+		executor := NewExecutor(runner, reader, writer)
+		executor.SetBmadHelp(bmadHelp)
+
+		err := executor.Execute(context.Background(), "STORY-1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "bmad-help fallback failed")
+		assert.Contains(t, err.Error(), "Claude CLI not found")
+		assert.Empty(t, runner.Calls)
+	})
+
+	t.Run("depth limit prevents infinite recursion", func(t *testing.T) {
+		// bmad-help always returns an unknown status, triggering recursion
+		reader := &MockStatusReader{
+			GetStoryStatusFunc: func(storyKey string) (status.Status, error) {
+				return status.Status("always-unknown"), nil
+			},
+		}
+		runner := &MockWorkflowRunner{}
+		writer := &MockStatusWriter{}
+		bmadHelp := &MockBmadHelpFallback{
+			Workflow:   "dev-story",
+			NextStatus: status.Status("still-unknown"),
+		}
+
+		executor := NewExecutor(runner, reader, writer)
+		executor.SetBmadHelp(bmadHelp)
+
+		err := executor.Execute(context.Background(), "STORY-1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "maximum depth")
+
+		// bmad-help should have been called maxBmadHelpDepth times
+		assert.Len(t, bmadHelp.Calls, maxBmadHelpDepth)
+	})
+}
+
 func TestGetSteps(t *testing.T) {
 	tests := []struct {
 		name          string

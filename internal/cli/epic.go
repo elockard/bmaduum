@@ -13,6 +13,7 @@ import (
 func newEpicCommand(app *App) *cobra.Command {
 	var dryRun bool
 	var autoRetry bool
+	var noBmadHelp bool
 
 	cmd := &cobra.Command{
 		Use:   "epic <epic-id>|all [epic-id...]",
@@ -34,6 +35,7 @@ Status is updated in sprint-status.yaml after each successful workflow.
 
 Use --dry-run to preview workflows without executing them.
 Use --auto-retry to automatically retry on rate limit errors.
+Use --no-bmad-help to disable the bmad-help fallback for unknown statuses.
 
 Examples:
   bmaduum epic 6
@@ -64,6 +66,11 @@ Examples:
 			// Create lifecycle executor with app dependencies
 			executor := lifecycle.NewExecutor(app.Runner, app.StatusReader, app.StatusWriter)
 			executor.SetRouter(app.Router)
+
+			// Enable bmad-help fallback unless disabled
+			if !noBmadHelp && app.BmadHelp != nil {
+				executor.SetBmadHelp(app.BmadHelp)
+			}
 
 			// Handle dry-run mode
 			if dryRun {
@@ -122,6 +129,7 @@ Examples:
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview workflows without executing them")
 	cmd.Flags().BoolVar(&autoRetry, "auto-retry", false, "Automatically retry on rate limit errors")
+	cmd.Flags().BoolVar(&noBmadHelp, "no-bmad-help", false, "Disable bmad-help fallback for unknown statuses")
 
 	return cmd
 }

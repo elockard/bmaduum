@@ -50,6 +50,29 @@ func (m *MockStatusWriter) UpdateStatus(storyKey string, newStatus status.Status
 	return nil
 }
 
+// MockBmadHelpFallback implements lifecycle.BmadHelpFallback for testing.
+type MockBmadHelpFallback struct {
+	Workflow   string
+	NextStatus status.Status
+	Err        error
+	Calls      []struct {
+		StoryKey      string
+		CurrentStatus status.Status
+	}
+}
+
+func (m *MockBmadHelpFallback) ResolveWorkflow(ctx context.Context, storyKey string, currentStatus status.Status) (string, status.Status, error) {
+	m.Calls = append(m.Calls, struct {
+		StoryKey      string
+		CurrentStatus status.Status
+	}{storyKey, currentStatus})
+
+	if m.Err != nil {
+		return "", "", m.Err
+	}
+	return m.Workflow, m.NextStatus, nil
+}
+
 // createSprintStatusFile creates a sprint-status.yaml file in a temporary directory for testing.
 func createSprintStatusFile(t *testing.T, tmpDir string, content string) {
 	t.Helper()

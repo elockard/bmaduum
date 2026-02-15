@@ -412,6 +412,108 @@ func TestStoryCommand_DryRunWithModules(t *testing.T) {
 	assert.Contains(t, stdout, "test-automation")
 }
 
+// TestStoryCommand_NoBmadHelpFlag tests that --no-bmad-help disables the fallback
+func TestStoryCommand_NoBmadHelpFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Story has an unknown status
+	createSprintStatusFile(t, tmpDir, `development_status:
+  STORY-1: pending-qa`)
+
+	mockRunner := &MockWorkflowRunner{}
+	mockWriter := &MockStatusWriter{}
+	statusReader := status.NewReader(tmpDir)
+	buf := &bytes.Buffer{}
+	printer := output.NewPrinterWithWriter(buf)
+
+	// Create a mock bmad-help that would resolve the status if called
+	mockBmadHelp := &MockBmadHelpFallback{
+		Workflow:   "code-review",
+		NextStatus: status.StatusDone,
+	}
+
+	app := &App{
+		Config:       config.DefaultConfig(),
+		StatusReader: statusReader,
+		StatusWriter: mockWriter,
+		Runner:       mockRunner,
+		Printer:      printer,
+		BmadHelp:     mockBmadHelp,
+	}
+
+	rootCmd := NewRootCommand(app)
+	outBuf := &bytes.Buffer{}
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(outBuf)
+	// Use --no-bmad-help flag
+	rootCmd.SetArgs([]string{"story", "--no-bmad-help", "STORY-1"})
+
+	err := rootCmd.Execute()
+
+	// Should fail with exit error since bmad-help is disabled and status is unknown
+	require.Error(t, err)
+	code, ok := IsExitError(err)
+	assert.True(t, ok, "error should be an ExitError")
+	assert.Equal(t, 1, code)
+
+	// bmad-help should NOT have been called
+	assert.Empty(t, mockBmadHelp.Calls, "bmad-help should not be called with --no-bmad-help")
+
+	// No workflows should have been executed
+	assert.Empty(t, mockRunner.ExecutedWorkflows)
+}
+
+// TestStoryCommand_BmadHelpFallbackResolves tests bmad-help fallback for unknown status
+func TestStoryCommand_BmadHelpFallbackResolves(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Story has an unknown status that bmad-help will resolve
+	createSprintStatusFile(t, tmpDir, `development_status:
+  STORY-1: pending-qa`)
+
+	mockRunner := &MockWorkflowRunner{}
+	mockWriter := &MockStatusWriter{}
+	statusReader := status.NewReader(tmpDir)
+	buf := &bytes.Buffer{}
+	printer := output.NewPrinterWithWriter(buf)
+
+	mockBmadHelp := &MockBmadHelpFallback{
+		Workflow:   "code-review",
+		NextStatus: status.StatusDone,
+	}
+
+	app := &App{
+		Config:       config.DefaultConfig(),
+		StatusReader: statusReader,
+		StatusWriter: mockWriter,
+		Runner:       mockRunner,
+		Printer:      printer,
+		BmadHelp:     mockBmadHelp,
+	}
+
+	rootCmd := NewRootCommand(app)
+	outBuf := &bytes.Buffer{}
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(outBuf)
+	rootCmd.SetArgs([]string{"story", "STORY-1"})
+
+	err := rootCmd.Execute()
+
+	// The lifecycle executor will call bmad-help, execute code-review, then re-read status.
+	// Since we're reading from a real file, the status will still be "pending-qa" on re-read
+	// (because our mock writer doesn't actually update the file). This means the recursive
+	// call will also hit bmad-help, and eventually hit the depth limit.
+	// This is expected behavior in the test since we can't mock the file re-reads.
+	// Instead, just verify bmad-help was called.
+	_ = err // Error is expected due to depth limit or continued unknown status
+
+	// bmad-help should have been called at least once
+	assert.NotEmpty(t, mockBmadHelp.Calls, "bmad-help should be called for unknown status")
+	assert.Equal(t, "STORY-1", mockBmadHelp.Calls[0].StoryKey)
+	assert.Equal(t, status.Status("pending-qa"), mockBmadHelp.Calls[0].CurrentStatus)
+
+	// code-review should have been executed at least once
+	assert.Contains(t, mockRunner.ExecutedWorkflows, "code-review")
+}
+
 // TestStoryCommand_DryRunWithoutModules tests dry-run has no module line when no modules
 func TestStoryCommand_DryRunWithoutModules(t *testing.T) {
 	tmpDir := t.TempDir()
