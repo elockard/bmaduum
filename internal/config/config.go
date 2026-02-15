@@ -163,14 +163,6 @@ func (c *Config) GetPrompt(workflowName, storyKey string) (string, error) {
 	return expandTemplate(tmpl, PromptData{StoryKey: storyKey})
 }
 
-// GetFullCycleSteps returns the list of workflow steps for a full lifecycle.
-//
-// This returns the configured FullCycle.Steps slice, which defines the
-// sequence of workflows to execute for run, queue, and epic commands.
-func (c *Config) GetFullCycleSteps() []string {
-	return c.FullCycle.Steps
-}
-
 // GetModel returns the model configured for a workflow, or empty string if not set.
 //
 // When empty, the Claude CLI will use its default model.

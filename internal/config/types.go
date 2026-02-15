@@ -38,10 +38,6 @@ type Config struct {
 	// Set to false for pre-v6 BMAD projects that use /bmad-bmm-* commands.
 	UseSlashCommands bool `mapstructure:"use_slash_commands"`
 
-	// FullCycle defines the steps for full lifecycle execution.
-	// Used by run, queue, and epic commands.
-	FullCycle FullCycleConfig `mapstructure:"full_cycle"`
-
 	// StatusPath is an explicit path to the sprint-status.yaml file.
 	// If empty (default), the status package auto-discovers the file by
 	// checking the v6 path then legacy path. Can also be set via
@@ -75,16 +71,6 @@ type WorkflowConfig struct {
 	// If empty, the default model is used.
 	// Examples: "opus", "sonnet", "haiku", "claude-sonnet-4-5-20250929"
 	Model string `mapstructure:"model"`
-}
-
-// FullCycleConfig defines the steps for a full development cycle.
-//
-// This configuration is used by the run, queue, and epic commands
-// to determine the sequence of workflows to execute.
-type FullCycleConfig struct {
-	// Steps is the ordered list of workflow names to execute.
-	// Default: ["create-story", "dev-story", "code-review", "git-commit"]
-	Steps []string `mapstructure:"steps"`
 }
 
 // ClaudeConfig contains Claude CLI configuration.
@@ -172,9 +158,6 @@ func DefaultConfig() *Config {
 				SlashCommand:   "/test-automation {{.StoryKey}}",
 				PromptTemplate: "Run automated tests for story {{.StoryKey}}. Execute the full test suite and report results. Fix any failing tests. Do not ask questions.",
 			},
-		},
-		FullCycle: FullCycleConfig{
-			Steps: []string{"create-story", "dev-story", "code-review", "git-commit"},
 		},
 		Claude: ClaudeConfig{
 			OutputFormat: "stream-json",

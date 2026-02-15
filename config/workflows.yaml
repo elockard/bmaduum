@@ -25,13 +25,6 @@ workflows:
     slash_command: "/git-commit {{.StoryKey}}"
     prompt_template: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format. Then push to the current branch. Do not ask questions."
 
-full_cycle:
-  steps:
-    - create-story
-    - dev-story
-    - code-review
-    - git-commit
-
 claude:
   output_format: stream-json
   binary_path: claude

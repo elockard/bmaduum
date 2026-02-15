@@ -21,9 +21,6 @@ func TestDefaultConfig(t *testing.T) {
 	// Check slash commands enabled by default
 	assert.True(t, cfg.UseSlashCommands)
 
-	// Check full cycle steps
-	assert.Equal(t, []string{"create-story", "dev-story", "code-review", "git-commit"}, cfg.FullCycle.Steps)
-
 	// Check defaults
 	assert.Equal(t, "stream-json", cfg.Claude.OutputFormat)
 	assert.Equal(t, "claude", cfg.Claude.BinaryPath)
@@ -76,13 +73,6 @@ func TestConfig_GetPrompt(t *testing.T) {
 	}
 }
 
-func TestConfig_GetFullCycleSteps(t *testing.T) {
-	cfg := DefaultConfig()
-	steps := cfg.GetFullCycleSteps()
-
-	assert.Equal(t, []string{"create-story", "dev-story", "code-review", "git-commit"}, steps)
-}
-
 func TestLoader_LoadFromFile(t *testing.T) {
 	// Create a temporary config file
 	tmpDir := t.TempDir()
@@ -92,9 +82,6 @@ func TestLoader_LoadFromFile(t *testing.T) {
 workflows:
   custom-workflow:
     prompt_template: "Custom: {{.StoryKey}}"
-full_cycle:
-  steps:
-    - custom-workflow
 claude:
   binary_path: /custom/path/claude
 output:
@@ -108,7 +95,6 @@ output:
 
 	require.NoError(t, err)
 	assert.Contains(t, cfg.Workflows, "custom-workflow")
-	assert.Equal(t, []string{"custom-workflow"}, cfg.FullCycle.Steps)
 	assert.Equal(t, "/custom/path/claude", cfg.Claude.BinaryPath)
 	assert.Equal(t, 50, cfg.Output.TruncateLines)
 }
