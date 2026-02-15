@@ -130,8 +130,8 @@ func ParseResponse(response string) (*Recommendation, error) {
 				nextStatus = status.StatusDone
 			}
 			return &Recommendation{
-				Workflow:    workflow,
-				NextStatus:  nextStatus,
+				Workflow:   workflow,
+				NextStatus: nextStatus,
 			}, nil
 		}
 	}

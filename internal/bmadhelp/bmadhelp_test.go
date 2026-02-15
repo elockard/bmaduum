@@ -69,19 +69,19 @@ func TestParseResponse(t *testing.T) {
 			wantStatus:   status.StatusReview,
 		},
 		{
-			name:    "no recognizable workflow",
+			name:     "no recognizable workflow",
 			response: "I'm not sure what to do with this story. Please check the sprint status.",
-			wantErr: true,
+			wantErr:  true,
 		},
 		{
-			name:    "empty response",
+			name:     "empty response",
 			response: "",
-			wantErr: true,
+			wantErr:  true,
 		},
 		{
-			name:    "unrelated workflow names",
+			name:     "unrelated workflow names",
 			response: "Try running deploy or build next.",
-			wantErr: true,
+			wantErr:  true,
 		},
 	}
 
