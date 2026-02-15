@@ -124,6 +124,9 @@ type App struct {
 	// Router is the workflow router for status-to-workflow mapping.
 	// If nil, callers fall back to default hardcoded routing.
 	Router *router.Router
+
+	// Modules holds discovered BMAD modules, or nil if no module manifest found.
+	Modules *manifest.ModuleManifest
 }
 
 // NewApp creates a new [App] with all production dependencies wired up.
@@ -159,6 +162,17 @@ func NewApp(cfg *config.Config) *App {
 		wfRouter = router.NewRouter()
 	}
 
+	// Try to load module manifest for module-aware lifecycle
+	var modules *manifest.ModuleManifest
+	if mm, err := manifest.ReadModulesFromFile("_bmad/_config/manifest.yaml"); err == nil {
+		modules = mm
+
+		// If SDET or TEA module is installed, add test-automation step after code-review
+		if modules.HasModule("sdet") || modules.HasModule("tea") {
+			wfRouter.InsertStepAfter("code-review", "test-automation", status.StatusDone)
+		}
+	}
+
 	return &App{
 		Config:       cfg,
 		Executor:     executor,
@@ -167,6 +181,7 @@ func NewApp(cfg *config.Config) *App {
 		StatusReader: statusReader,
 		StatusWriter: statusWriter,
 		Router:       wfRouter,
+		Modules:      modules,
 	}
 }
 

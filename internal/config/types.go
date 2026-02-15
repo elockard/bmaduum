@@ -168,6 +168,10 @@ func DefaultConfig() *Config {
 				SlashCommand:   "/git-commit {{.StoryKey}}",
 				PromptTemplate: "Commit all changes for story {{.StoryKey}} with a descriptive commit message following conventional commits format. Then push to the current branch. Do not ask questions.",
 			},
+			"test-automation": {
+				SlashCommand:   "/test-automation {{.StoryKey}}",
+				PromptTemplate: "Run automated tests for story {{.StoryKey}}. Execute the full test suite and report results. Fix any failing tests. Do not ask questions.",
+			},
 		},
 		FullCycle: FullCycleConfig{
 			Steps: []string{"create-story", "dev-story", "code-review", "git-commit"},

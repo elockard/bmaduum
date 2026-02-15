@@ -185,6 +185,53 @@ func (r *Router) GetLifecycle(s status.Status) ([]LifecycleStep, error) {
 	return steps, nil
 }
 
+// InsertStepAfter inserts a new lifecycle step after the named workflow in the chain.
+//
+// This is used to inject module-specific steps (e.g., test-automation after code-review
+// when the SDET module is installed). The new step's NextStatus replaces the previous
+// step's NextStatus, and the previous step transitions to an intermediate status instead.
+//
+// If afterWorkflow is not found in the chain, InsertStepAfter is a no-op.
+// If the workflow already exists in the chain, InsertStepAfter is a no-op (avoids duplicates).
+func (r *Router) InsertStepAfter(afterWorkflow string, newWorkflow string, nextStatus status.Status) {
+	// Check if the new workflow already exists in the chain
+	for _, step := range r.chain {
+		if step.Workflow == newWorkflow {
+			return
+		}
+	}
+
+	// Find the index of afterWorkflow
+	insertIdx := -1
+	for i, step := range r.chain {
+		if step.Workflow == afterWorkflow {
+			insertIdx = i + 1
+			break
+		}
+	}
+	if insertIdx < 0 {
+		return
+	}
+
+	// Insert the new step
+	newStep := chainStep{
+		Workflow:   newWorkflow,
+		NextStatus: nextStatus,
+	}
+
+	// Grow the chain and shift elements
+	r.chain = append(r.chain, chainStep{})
+	copy(r.chain[insertIdx+1:], r.chain[insertIdx:])
+	r.chain[insertIdx] = newStep
+
+	// Update statusChainIndex: all indices >= insertIdx need to shift by 1
+	for s, idx := range r.statusChainIndex {
+		if idx >= insertIdx {
+			r.statusChainIndex[s] = idx + 1
+		}
+	}
+}
+
 // defaultRouter is the package-level router used by backward-compatible functions.
 var defaultRouter = NewRouter()
 

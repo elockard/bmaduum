@@ -3,12 +3,23 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"bmaduum/internal/lifecycle"
 	"bmaduum/internal/router"
 )
+
+// printModuleInfo prints discovered BMAD modules for dry-run output.
+// Does nothing if no modules are discovered.
+func printModuleInfo(app *App) {
+	if app.Modules == nil {
+		return
+	}
+	names := app.Modules.Names()
+	fmt.Printf("Modules: %s\n", strings.Join(names, ", "))
+}
 
 func newStoryCommand(app *App) *cobra.Command {
 	var dryRun bool
@@ -110,6 +121,7 @@ func runStoryDryRun(cmd *cobra.Command, app *App, executor *lifecycle.Executor, 
 			return NewExitError(1)
 		}
 
+		printModuleInfo(app)
 		fmt.Printf("Dry run for story %s:\n", storyKey)
 		for i, step := range steps {
 			modelInfo := ""
@@ -123,6 +135,7 @@ func runStoryDryRun(cmd *cobra.Command, app *App, executor *lifecycle.Executor, 
 	}
 
 	// Multiple stories dry-run - detailed output
+	printModuleInfo(app)
 	fmt.Printf("Dry run for %d stories:\n", len(storyKeys))
 
 	totalWorkflows := 0

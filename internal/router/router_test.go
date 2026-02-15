@@ -355,6 +355,125 @@ test,review,done
 	}
 }
 
+func TestRouter_InsertStepAfter(t *testing.T) {
+	r := NewRouter()
+
+	// Insert test-automation after code-review
+	r.InsertStepAfter("code-review", "test-automation", status.StatusDone)
+
+	// Verify the chain now has 5 steps
+	steps, err := r.GetLifecycle(status.StatusBacklog)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(steps) != 5 {
+		t.Fatalf("got %d steps, want 5", len(steps))
+	}
+
+	// Verify order: create-story, dev-story, code-review, test-automation, git-commit
+	wantWorkflows := []string{"create-story", "dev-story", "code-review", "test-automation", "git-commit"}
+	for i, want := range wantWorkflows {
+		if steps[i].Workflow != want {
+			t.Errorf("step[%d].Workflow = %q, want %q", i, steps[i].Workflow, want)
+		}
+	}
+
+	// Verify status chain index was updated - review should now include test-automation
+	reviewSteps, err := r.GetLifecycle(status.StatusReview)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(reviewSteps) != 3 {
+		t.Fatalf("review: got %d steps, want 3", len(reviewSteps))
+	}
+	if reviewSteps[0].Workflow != "code-review" {
+		t.Errorf("review step[0] = %q, want code-review", reviewSteps[0].Workflow)
+	}
+	if reviewSteps[1].Workflow != "test-automation" {
+		t.Errorf("review step[1] = %q, want test-automation", reviewSteps[1].Workflow)
+	}
+	if reviewSteps[2].Workflow != "git-commit" {
+		t.Errorf("review step[2] = %q, want git-commit", reviewSteps[2].Workflow)
+	}
+}
+
+func TestRouter_InsertStepAfter_WorkflowNotFound(t *testing.T) {
+	r := NewRouter()
+
+	// Insert after non-existent workflow should be a no-op
+	r.InsertStepAfter("nonexistent", "test-automation", status.StatusDone)
+
+	steps, err := r.GetLifecycle(status.StatusBacklog)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(steps) != 4 {
+		t.Errorf("chain should be unchanged, got %d steps, want 4", len(steps))
+	}
+}
+
+func TestRouter_InsertStepAfter_DuplicateWorkflow(t *testing.T) {
+	r := NewRouter()
+
+	// First insert should work
+	r.InsertStepAfter("code-review", "test-automation", status.StatusDone)
+	steps, _ := r.GetLifecycle(status.StatusBacklog)
+	if len(steps) != 5 {
+		t.Fatalf("first insert: got %d steps, want 5", len(steps))
+	}
+
+	// Second insert of same workflow should be a no-op
+	r.InsertStepAfter("code-review", "test-automation", status.StatusDone)
+	steps, _ = r.GetLifecycle(status.StatusBacklog)
+	if len(steps) != 5 {
+		t.Errorf("duplicate insert should be no-op: got %d steps, want 5", len(steps))
+	}
+}
+
+func TestRouter_InsertStepAfter_AtEnd(t *testing.T) {
+	r := NewRouter()
+
+	// Insert after the last step (git-commit)
+	r.InsertStepAfter("git-commit", "deploy", status.StatusDone)
+
+	steps, err := r.GetLifecycle(status.StatusBacklog)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(steps) != 5 {
+		t.Fatalf("got %d steps, want 5", len(steps))
+	}
+	if steps[4].Workflow != "deploy" {
+		t.Errorf("last step = %q, want deploy", steps[4].Workflow)
+	}
+}
+
+func TestRouter_InsertStepAfter_PreservesGetWorkflow(t *testing.T) {
+	r := NewRouter()
+	r.InsertStepAfter("code-review", "test-automation", status.StatusDone)
+
+	// GetWorkflow should still return the same single workflows
+	tests := []struct {
+		status       status.Status
+		wantWorkflow string
+	}{
+		{status.StatusBacklog, "create-story"},
+		{status.StatusReadyForDev, "dev-story"},
+		{status.StatusInProgress, "dev-story"},
+		{status.StatusReview, "code-review"},
+	}
+
+	for _, tt := range tests {
+		workflow, err := r.GetWorkflow(tt.status)
+		if err != nil {
+			t.Errorf("GetWorkflow(%q) err: %v", tt.status, err)
+		}
+		if workflow != tt.wantWorkflow {
+			t.Errorf("GetWorkflow(%q) = %q, want %q", tt.status, workflow, tt.wantWorkflow)
+		}
+	}
+}
+
 func TestNewRouterFromManifest_MatchesDefaultRouter(t *testing.T) {
 	// A manifest that matches the default hardcoded routing should produce identical results
 	csv := `phase,workflow,agent,command,trigger_status,next_status

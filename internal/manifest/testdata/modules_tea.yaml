@@ -1,0 +1,7 @@
+modules:
+  - name: bmm
+    version: "6.0.0"
+    path: bmm
+  - name: tea
+    version: "1.2.0"
+    path: modules/tea

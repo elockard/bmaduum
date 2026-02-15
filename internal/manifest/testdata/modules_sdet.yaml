@@ -1,0 +1,7 @@
+modules:
+  - name: bmm
+    version: "6.0.0"
+    path: bmm
+  - name: sdet
+    version: "1.0.0"
+    path: modules/sdet

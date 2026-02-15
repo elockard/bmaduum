@@ -127,6 +127,8 @@ Examples:
 }
 
 func runEpicDryRun(cmd *cobra.Command, app *App, executor *lifecycle.Executor, epicIDs []string) error {
+	printModuleInfo(app)
+
 	totalWorkflows := 0
 	storiesWithWork := 0
 	storiesComplete := 0

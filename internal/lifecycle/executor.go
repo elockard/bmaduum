@@ -168,7 +168,7 @@ func (e *Executor) GetSteps(storyKey string) ([]router.LifecycleStep, error) {
 	}
 
 	// Get lifecycle steps from current status
-	steps, err := router.GetLifecycle(currentStatus)
+	steps, err := e.getLifecycle(currentStatus)
 	if err != nil {
 		return nil, err // Returns router.ErrStoryComplete for done stories
 	}

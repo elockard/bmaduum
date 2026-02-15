@@ -1,0 +1,16 @@
+modules:
+  - name: bmm
+    version: "6.0.0"
+    path: bmm
+  - name: tea
+    version: "1.2.0"
+    path: modules/tea
+  - name: sdet
+    version: "1.0.0"
+    path: modules/sdet
+  - name: bmgd
+    version: "2.0.0"
+    path: modules/bmgd
+  - name: cis
+    version: "1.1.0"
+    path: modules/cis

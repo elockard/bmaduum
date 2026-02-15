@@ -2,13 +2,16 @@ package cli
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"bmaduum/internal/config"
+	"bmaduum/internal/manifest"
 	"bmaduum/internal/output"
+	"bmaduum/internal/router"
 	"bmaduum/internal/status"
 )
 
@@ -287,4 +290,170 @@ func TestStoryCommand_DryRun(t *testing.T) {
 			assert.Empty(t, mockWriter.Updates)
 		})
 	}
+}
+
+// TestStoryCommand_WithSDETModule tests that SDET module injects test-automation step
+func TestStoryCommand_WithSDETModule(t *testing.T) {
+	tmpDir := t.TempDir()
+	createSprintStatusFile(t, tmpDir, `development_status:
+  STORY-1: backlog`)
+
+	mockRunner := &MockWorkflowRunner{}
+	mockWriter := &MockStatusWriter{}
+	statusReader := status.NewReader(tmpDir)
+	buf := &bytes.Buffer{}
+	printer := output.NewPrinterWithWriter(buf)
+
+	// Create a router with test-automation step injected (simulating SDET module)
+	wfRouter := router.NewRouter()
+	wfRouter.InsertStepAfter("code-review", "test-automation", status.StatusDone)
+
+	modules, err := manifest.ReadModulesFromBytes([]byte(`modules:
+  - name: bmm
+    version: "6.0.0"
+  - name: sdet
+    version: "1.0.0"
+`))
+	require.NoError(t, err)
+
+	app := &App{
+		Config:       config.DefaultConfig(),
+		StatusReader: statusReader,
+		StatusWriter: mockWriter,
+		Runner:       mockRunner,
+		Printer:      printer,
+		Router:       wfRouter,
+		Modules:      modules,
+	}
+
+	rootCmd := NewRootCommand(app)
+	outBuf := &bytes.Buffer{}
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(outBuf)
+	rootCmd.SetArgs([]string{"story", "STORY-1"})
+
+	err = rootCmd.Execute()
+	assert.NoError(t, err)
+
+	// Should include test-automation step
+	assert.Equal(t, []string{
+		"create-story", "dev-story", "code-review", "test-automation", "git-commit",
+	}, mockRunner.ExecutedWorkflows)
+
+	// Should have 5 status updates
+	require.Len(t, mockWriter.Updates, 5)
+	assert.Equal(t, status.StatusReadyForDev, mockWriter.Updates[0].NewStatus)
+	assert.Equal(t, status.StatusReview, mockWriter.Updates[1].NewStatus)
+	assert.Equal(t, status.StatusDone, mockWriter.Updates[2].NewStatus) // code-review
+	assert.Equal(t, status.StatusDone, mockWriter.Updates[3].NewStatus) // test-automation
+	assert.Equal(t, status.StatusDone, mockWriter.Updates[4].NewStatus) // git-commit
+}
+
+// TestStoryCommand_DryRunWithModules tests that modules appear in dry-run output
+func TestStoryCommand_DryRunWithModules(t *testing.T) {
+	tmpDir := t.TempDir()
+	createSprintStatusFile(t, tmpDir, `development_status:
+  STORY-1: backlog`)
+
+	mockRunner := &MockWorkflowRunner{}
+	mockWriter := &MockStatusWriter{}
+	statusReader := status.NewReader(tmpDir)
+	buf := &bytes.Buffer{}
+	printer := output.NewPrinterWithWriter(buf)
+
+	// Create a router with test-automation step injected
+	wfRouter := router.NewRouter()
+	wfRouter.InsertStepAfter("code-review", "test-automation", status.StatusDone)
+
+	modules, err := manifest.ReadModulesFromBytes([]byte(`modules:
+  - name: bmm
+    version: "6.0.0"
+  - name: sdet
+    version: "1.0.0"
+`))
+	require.NoError(t, err)
+
+	app := &App{
+		Config:       config.DefaultConfig(),
+		StatusReader: statusReader,
+		StatusWriter: mockWriter,
+		Runner:       mockRunner,
+		Printer:      printer,
+		Router:       wfRouter,
+		Modules:      modules,
+	}
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	rootCmd := NewRootCommand(app)
+	outBuf := &bytes.Buffer{}
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(outBuf)
+	rootCmd.SetArgs([]string{"story", "--dry-run", "STORY-1"})
+
+	err = rootCmd.Execute()
+	w.Close()
+	os.Stdout = oldStdout
+
+	var stdoutBuf bytes.Buffer
+	stdoutBuf.ReadFrom(r)
+	stdout := stdoutBuf.String()
+
+	assert.NoError(t, err)
+	assert.Empty(t, mockRunner.ExecutedWorkflows, "dry-run should not execute workflows")
+
+	// Verify module info is present
+	assert.Contains(t, stdout, "Modules: bmm, sdet")
+
+	// Verify test-automation appears in the steps
+	assert.Contains(t, stdout, "test-automation")
+}
+
+// TestStoryCommand_DryRunWithoutModules tests dry-run has no module line when no modules
+func TestStoryCommand_DryRunWithoutModules(t *testing.T) {
+	tmpDir := t.TempDir()
+	createSprintStatusFile(t, tmpDir, `development_status:
+  STORY-1: backlog`)
+
+	mockRunner := &MockWorkflowRunner{}
+	mockWriter := &MockStatusWriter{}
+	statusReader := status.NewReader(tmpDir)
+	buf := &bytes.Buffer{}
+	printer := output.NewPrinterWithWriter(buf)
+
+	app := &App{
+		Config:       config.DefaultConfig(),
+		StatusReader: statusReader,
+		StatusWriter: mockWriter,
+		Runner:       mockRunner,
+		Printer:      printer,
+		// No Router, no Modules
+	}
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	rootCmd := NewRootCommand(app)
+	outBuf := &bytes.Buffer{}
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(outBuf)
+	rootCmd.SetArgs([]string{"story", "--dry-run", "STORY-1"})
+
+	err := rootCmd.Execute()
+	w.Close()
+	os.Stdout = oldStdout
+
+	var stdoutBuf bytes.Buffer
+	stdoutBuf.ReadFrom(r)
+	stdout := stdoutBuf.String()
+
+	assert.NoError(t, err)
+
+	// Should not contain modules line
+	assert.NotContains(t, stdout, "Modules:")
 }
